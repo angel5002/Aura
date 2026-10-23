@@ -1,0 +1,7 @@
+## IDF Component Manager Manifest File
+## AURA: version fijada (verificada el 22/10/2026: LICENSE Apache-2.0 en todos los componentes).
+dependencies:
+  idf: '>=5.5'
+  espressif/led_strip: "^3.0.0"
+  esp_wifi_sensing:
+    version: '0.1.1~3'

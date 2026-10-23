@@ -1,0 +1,85 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "sensores": {
+      "$sensor": {
+        ".read": "auth != null && auth.uid === '26Iu3XfM5qfhgQxYjLTkcaFuZRQ2'",
+        ".write": "auth != null && auth.uid === 'RSZSiH4Qe5OXnuhwdhYvzYz9Ex22'",
+        ".validate": "$sensor.matches(/^[a-z0-9_]{1,16}$/)",
+        "estado": {
+          ".validate": "newData.hasChildren(['estado', 'mov', 'presencia', 'entrenada', 'alerta', 'desde', 't'])",
+          "estado": { ".validate": "newData.isString() && newData.val().matches(/^(CALIBRANDO|MOVIMIENTO|PRESENCIA_QUIETA|VACIA|SIN_MOVIMIENTO)$/) && ((newData.val() !== 'VACIA' && newData.val() !== 'PRESENCIA_QUIETA') || newData.parent().child('entrenada').val() === true)" },
+          "mov": { ".validate": "newData.isBoolean()" },
+          "presencia": { ".validate": "newData.isString() && newData.val().matches(/^(no_disponible|vacia|presente)$/) && (newData.parent().child('entrenada').val() === true || newData.val() === 'no_disponible')" },
+          "entrenada": { ".validate": "newData.isBoolean()" },
+          "alerta": { ".validate": "newData.isBoolean()" },
+          "desde": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "t": { ".validate": "newData.isNumber() && newData.val() <= now" },
+          "$otro": { ".validate": false }
+        },
+        "latido": {
+          ".validate": "newData.hasChildren(['t', 'up', 'heap', 'heap_min', 'ver'])",
+          "t": { ".validate": "newData.isNumber() && newData.val() <= now" },
+          "up": { ".validate": "newData.isNumber()" },
+          "heap": { ".validate": "newData.isNumber()" },
+          "heap_min": { ".validate": "newData.isNumber()" },
+          "red": { ".validate": "newData.isString() && newData.val().length <= 12" },
+          "rssi": { ".validate": "newData.isNumber()" },
+          "ver": { ".validate": "newData.isString() && newData.val().length <= 16" },
+          "renov": { ".validate": "newData.isNumber()" },
+          "hms_s": { ".validate": "newData.isNumber()" },
+          "ts_p95": { ".validate": "newData.isNumber()" },
+          "reinicio": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "$otro": { ".validate": false }
+        },
+        "comando": {
+          ".validate": "newData.hasChildren(['id', 'cmd', 'ok', 'origen', 't'])",
+          "id": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "cmd": { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "ok": { ".validate": "newData.isBoolean()" },
+          "detalle": { ".validate": "newData.isString() && newData.val().length <= 96" },
+          "origen": { ".validate": "newData.isString() && newData.val().matches(/^(usb|local|nube)$/)" },
+          "t": { ".validate": "newData.isNumber() && newData.val() <= now" },
+          "$otro": { ".validate": false }
+        },
+        "$otro": { ".validate": false }
+      }
+    },
+
+    "crudo": {
+      "$sensor": {
+        ".read": "auth != null && auth.uid === '26Iu3XfM5qfhgQxYjLTkcaFuZRQ2'",
+        "$bloque": {
+          ".write": "auth != null && (auth.uid === 'RSZSiH4Qe5OXnuhwdhYvzYz9Ex22' || (auth.uid === '26Iu3XfM5qfhgQxYjLTkcaFuZRQ2' && !newData.exists()))",
+          ".validate": "$bloque.matches(/^[0-9]{13}$/) && newData.hasChildren(['t0', 't1', 'n', 'mov', 'pres', 'ncsi', 'nsub', 'jit', 'am', 'ad'])",
+          "t0": { ".validate": "newData.isNumber()" },
+          "t1": { ".validate": "newData.isNumber() && newData.val() >= newData.parent().child('t0').val()" },
+          "n": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 512" },
+          "mov": { ".validate": "newData.isNumber()" },
+          "pres": { ".validate": "newData.isNumber()" },
+          "ncsi": { ".validate": "newData.isNumber()" },
+          "nsub": { ".validate": "newData.isNumber() && newData.val() <= 64" },
+          "jit": { ".validate": "newData.isString() && newData.val().length <= 3200" },
+          "am": { ".validate": "newData.isString() && newData.val().length <= 800" },
+          "ad": { ".validate": "newData.isString() && newData.val().length <= 800" },
+          "$otro": { ".validate": false }
+        }
+      }
+    },
+
+    "comandos": {
+      "$sensor": {
+        ".read": "auth != null && auth.uid === 'RSZSiH4Qe5OXnuhwdhYvzYz9Ex22'",
+        "$cmd": {
+          ".write": "auth != null && auth.uid === '26Iu3XfM5qfhgQxYjLTkcaFuZRQ2'",
+          ".validate": "newData.hasChildren(['cmd', 't'])",
+          "cmd": { ".validate": "newData.isString() && newData.val().length <= 120 && newData.val().matches(/^(RESET_BASELINE|TRAIN_START AP|TRAIN_STOP AP|GET_CFG( AP| ALL)?|SET_AMPLITUDE_LOG (on|off)|SET_CFG AP( [a-z_]+=[0-9.]+){1,4})$/)" },
+          "t": { ".validate": "newData.val() === now" },
+          "$otro": { ".validate": false }
+        }
+      }
+    }
+  }
+}

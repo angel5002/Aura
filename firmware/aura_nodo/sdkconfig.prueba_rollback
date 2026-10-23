@@ -1,0 +1,6 @@
+# Variante SOLO para la prueba D8(d): imagen que nunca se marca valida y se reinicia a los 30 s.
+# Se compila en build_rollback con:
+#   idf.py -C C:\aura\firmware\aura_nodo -B C:\aura\firmware\aura_nodo\build_rollback -D SDKCONFIG=C:\aura\firmware\aura_nodo\sdkconfig.rollback -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.prueba_rollback" build
+CONFIG_AURA_PRUEBA_ROLLBACK=y
+CONFIG_APP_PROJECT_VER_FROM_CONFIG=y
+CONFIG_APP_PROJECT_VER="0.1.2-rollback"

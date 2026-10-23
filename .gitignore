@@ -1,0 +1,65 @@
+# --- Datos de sesiones con personas: SENSIBLES, nunca a git ---
+datos/crudos/*
+datos/procesados/*
+!datos/crudos/.gitkeep
+!datos/procesados/.gitkeep
+# Por si se guardan capturas fuera de datos/
+*.log
+csi_data*.csv
+
+# --- Credenciales de Firebase: NUNCA a git ---
+secretos/
+google-services.json
+**/google-services.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+
+# --- App Android ---
+app/.gradle/
+app/**/build/
+app/local.properties
+app/.idea/
+app/.kotlin/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# --- Repositorio oficial clonado (tiene su propio git) ---
+esp-csi/
+
+# --- Firmware: artefactos de compilación de ESP-IDF ---
+firmware/**/build/
+firmware/**/build_*/
+firmware/**/managed_components/
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old
+firmware/**/dependencies.lock
+# sdkconfig generados de las variantes de prueba (los *.defaults, *.prueba_rollback y *.rx64 SI van a git)
+firmware/**/sdkconfig.rollback
+firmware/**/sdkconfig.build_*
+
+# --- Pruebas: salidas generadas (pueden contener datos de sesiones) ---
+analisis/pruebas/salida/
+firebase/node_modules/
+firebase/pruebas/resultado_t5.json
+firebase/*-debug.log
+
+# --- Python ---
+analisis/.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# --- Sistema / editores ---
+Thumbs.db
+desktop.ini
+.vscode/
+
+# Binarios archivados por version (sin secretos, pero pesados)
+firmware/versiones/**/bin/
+
+# Registro de sesiones con personas (fechas, posicion, observaciones): sensible, fuera de git
+registro_sesiones.csv
+# Paquetes generados (el kit va como carpeta kit_captura/)
+*.zip

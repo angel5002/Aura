@@ -1,0 +1,9 @@
+# Variante de POCA RAM (solo si D1/D3/D9 muestran heap insuficiente). Reduce ~14 KB:
+#   cola local 16 -> 6 KB (~0,2 s de CSI a velocidad completa) y buffers de cuerpo/respuesta de la nube
+#   4 -> 3 KB cada uno (un bloque /crudo tipico ocupa ~1,4 KB; la respuesta de inicio de sesion ~2 KB).
+# Se compila en build_bajo_ram con:
+#   idf.py -C C:\aura\firmware\aura_nodo -B C:\aura\firmware\aura_nodo\build_bajo_ram -D SDKCONFIG=C:\aura\firmware\aura_nodo\sdkconfig.build_bajo_ram -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.bajo_ram" build
+CONFIG_AURA_LOCAL_COLA_KB=6
+CONFIG_AURA_NUBE_BUFFER_KB=3
+CONFIG_APP_PROJECT_VER_FROM_CONFIG=y
+CONFIG_APP_PROJECT_VER="0.1.2-bajoram"

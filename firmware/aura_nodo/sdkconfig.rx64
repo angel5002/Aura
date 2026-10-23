@@ -1,0 +1,6 @@
+# Variante para la prueba D9: 64 buffers dinamicos de recepcion WiFi (en vez de 128).
+# Solo se usa si D9 muestra heap minimo < 50 KB con 128. Se compila en build_rx64 con:
+#   idf.py -C C:\aura\firmware\aura_nodo -B C:\aura\firmware\aura_nodo\build_rx64 -D SDKCONFIG=C:\aura\firmware\aura_nodo\sdkconfig.build_rx64 -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.rx64" build
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=64
+CONFIG_APP_PROJECT_VER_FROM_CONFIG=y
+CONFIG_APP_PROJECT_VER="0.1.2-rx64"
