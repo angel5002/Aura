@@ -107,15 +107,21 @@ class Panel:
         import matplotlib.pyplot as plt
         self.plt = plt
         self.fig, (self.ax_calor, self.ax_senal) = plt.subplots(2, 1, figsize=(11, 7), height_ratios=[1.3, 1])
-        self.titulo = self.fig.suptitle("AURA", fontsize=14)
+        self.titulo = self.fig.suptitle("AURA", fontsize=13, x=0.40)
         if rotulo:
             self.fig.text(0.5, 0.005, rotulo, ha="center", va="bottom", fontsize=10, style="italic", color="#444444")
+        # Indicador grande (para proyectar): estado y movimiento; y la ultima marca de teclado (E/S/M)
+        self.indicador = self.fig.text(0.99, 0.985, "", ha="right", va="top", fontsize=15, weight="bold",
+                                       color="white", bbox=dict(boxstyle="round", facecolor="#7f7f7f"))
+        self.txt_marca = self.fig.text(0.01, 0.985, "", ha="left", va="top", fontsize=10, color="#333333")
 
     def dibujar(self, e: Estado, t_ref: float | None = None):
         with e.lock:
             amp = list(e.amp)
             senal = list(e.senal)
-            estado, fuente, t_ult = e.estado, e.fuente, e.t_ultimo
+            estado, fuente, t_ult, mov = e.estado, e.fuente, e.t_ultimo, e.mov
+        self.indicador.set_text(f"{estado}\nmovimiento: {'SÍ' if mov else 'no'}")
+        self.indicador.get_bbox_patch().set_facecolor(COLORES.get(estado, "#7f7f7f"))
         t_ref = t_ref or t_ult or time.time()
         self.ax_calor.clear()
         self.ax_senal.clear()
@@ -205,20 +211,62 @@ def reproducir(archivo: Path, exportar: Path | None, fps: float, desde: float | 
     return 0
 
 
-def vivo(ip: str | None, id_sesion: str, usar_nube: bool) -> int:
+def vivo(ip: str | None, id_sesion: str, usar_nube: bool, puerto: str | None = None,
+         segundos: float | None = None, png: Path | None = None) -> int:
     import receptor_local as rl
     e = Estado()
-    panel = Panel(interactivo=True)
-    ip = ip or (rl.descubrir(15) or {}).get("ip")
+    sin_ventana = png is not None
+    if not sin_ventana:
+        # Las teclas de marca no deben disparar atajos de matplotlib ('s' = guardar, 'q' = cerrar)
+        for k, v in (("keymap.save", ["ctrl+s"]), ("keymap.quit", ["ctrl+w"]), ("keymap.quit_all", [])):
+            matplotlib.rcParams[k] = v
+    panel = Panel(interactivo=not sin_ventana)
+    rl.DIR_CRUDOS.mkdir(parents=True, exist_ok=True)
+    ultimo_local = [0.0]
+
+    def al_local(t, d):
+        ultimo_local[0] = t
+        e.agregar_datagrama(t, d)
+
+    ip_directa = ip is not None
+    if not ip and not puerto:
+        ip = (rl.descubrir(15) or {}).get("ip")
     if ip:
         destino = rl.DIR_CRUDOS / f"{id_sesion}_local.csv"
+        # Con --ip: sin descubrimiento y sin bind() (no hace falta regla de firewall ni administrador)
         hilo = threading.Thread(target=rl.recibir, args=(ip, rl.PUERTO_DATOS, destino, 10 ** 9),
-                                kwargs={"al_recibir": e.agregar_datagrama, "silencioso": True}, daemon=True)
+                                kwargs={"al_recibir": al_local, "silencioso": True, "nombre": id_sesion,
+                                        "bind_explicito": not ip_directa}, daemon=True)
         hilo.start()
         print(f"Via local: {ip} (grabando en {destino})")
+    parar = threading.Event()
+    if puerto:
+        threading.Thread(target=leer_usb_en_vivo, args=(puerto, id_sesion, e, ultimo_local, parar),
+                         daemon=True).start()
+        print(f"USB: {puerto} (grabando en {rl.DIR_CRUDOS / (id_sesion + '.csv')})")
+    marcas = rl.DIR_CRUDOS / f"{id_sesion}_marcas.csv"
+
+    def al_tecla(ev):
+        tecla = (ev.key or "").upper()
+        if tecla not in SIGNIFICADO_TECLA:
+            return
+        t = time.time()
+        nuevo = not marcas.exists()
+        with open(marcas, "a", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            if nuevo:
+                w.writerow(["t_pc_unix", "tecla", "significado"])
+            w.writerow([f"{t:.6f}", tecla, SIGNIFICADO_TECLA[tecla]])
+        panel.txt_marca.set_text(f"Marca {tecla} ({SIGNIFICADO_TECLA[tecla]}) a las {datetime.fromtimestamp(t):%H:%M:%S}")
+        print(f"{datetime.fromtimestamp(t):%H:%M:%S} marca {tecla}: {SIGNIFICADO_TECLA[tecla]}", flush=True)
+
+    if not sin_ventana:
+        panel.fig.canvas.mpl_connect("key_press_event", al_tecla)
+        panel.txt_marca.set_text("Teclas: E = entra a la zona, S = sale, M = marca libre")
+    fin = time.time() + segundos if segundos else None
     sesion = cfg = None
     prox_nube = 0
-    while panel.plt.fignum_exists(panel.fig.number):
+    while (sin_ventana or panel.plt.fignum_exists(panel.fig.number)) and (fin is None or time.time() < fin):
         sin_local = e.fuente != "local" or (e.t_ultimo and time.time() - e.t_ultimo > 10)
         if usar_nube and sin_local and time.time() >= prox_nube:
             from fb_rest import Sesion, cargar_config, peticion
@@ -231,8 +279,42 @@ def vivo(ip: str | None, id_sesion: str, usar_nube: bool) -> int:
             e.agregar_nube(est or {}, bloque)
             prox_nube = time.time() + 5
         panel.dibujar(e)
-        panel.plt.pause(0.2)
+        if sin_ventana:
+            time.sleep(0.2)
+        else:
+            panel.plt.pause(0.2)
+    parar.set()
+    if png:
+        panel.guardar(png)
+        print(f"Cuadro guardado en {png}")
     return 0
+
+
+SIGNIFICADO_TECLA = {"E": "entra a la zona", "S": "sale de la zona", "M": "marca libre"}
+
+
+def leer_usb_en_vivo(puerto: str, id_sesion: str, e: Estado, ultimo_local: list, parar: threading.Event):
+    """Guarda el USB en <id>.csv (formato de capturar.py) y alimenta el panel con las lineas HMS cuando la via
+    local no esta llegando (plan B sin red: señal del detector y estado, sin mapa de calor)."""
+    from capturar import LectorSerie, nuevo_destino
+    destino = nuevo_destino(id_sesion)
+    lector = LectorSerie(puerto, 115200)
+    with open(destino, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["t_pc_unix", "linea"])
+        while not parar.is_set():
+            for t_ev, txt in lector.eventos:
+                w.writerow([f"{t_ev:.6f}", "#AURA " + txt])
+            lector.eventos.clear()
+            b = lector.leer_linea()
+            if b is None:
+                continue
+            t = time.time()
+            linea = b.decode("utf-8", errors="replace").rstrip("\r\n")
+            w.writerow([f"{t:.6f}", linea])
+            if linea.startswith("HMS:") and t - ultimo_local[0] > 5:
+                e.agregar_datagrama(t, LineaUSB(linea[4:]))
+    lector.cerrar()
 
 
 def main() -> int:
@@ -248,10 +330,13 @@ def main() -> int:
     ap.add_argument("--desde", type=float, help="hora UNIX (s) de inicio de la reproduccion")
     ap.add_argument("--hasta", type=float, help="hora UNIX (s) de fin de la reproduccion")
     ap.add_argument("--rotulo", default=ROTULO_REPRODUCCION, help="texto al pie de cada cuadro ('' = sin rotulo)")
+    ap.add_argument("--puerto", help="en vivo: leer y guardar tambien el USB (plan B sin red)")
+    ap.add_argument("--segundos", type=float, help="en vivo: cerrar solo tras N segundos (prueba)")
+    ap.add_argument("--png", type=Path, help="en vivo: sin ventana; guarda el ultimo cuadro (prueba)")
     args = ap.parse_args()
     if args.reproducir:
         return reproducir(args.reproducir, args.exportar, args.fps, args.desde, args.hasta, args.rotulo or None)
-    return vivo(args.ip, args.id_sesion, args.nube)
+    return vivo(args.ip, args.id_sesion, args.nube, args.puerto, args.segundos, args.png)
 
 
 if __name__ == "__main__":

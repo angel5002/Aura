@@ -18,7 +18,7 @@ Linea de tiempo (S0 = inicio, la persona ya esta FUERA de la sala):
 import argparse
 import csv
 import json
-import math
+
 import sys
 import threading
 import time
@@ -40,7 +40,9 @@ def main() -> int:
     ap.add_argument("--puerto", required=True)
     ap.add_argument("--ip", required=True)
     ap.add_argument("--id-sesion", required=True)
-    ap.add_argument("--anticipacion", type=float, default=300, help="segundos minimos hasta S0")
+    ap.add_argument("--inicio", required=True,
+                    help="HH:MM:SS de S0 (hora de la PC). REGLA 24/10/2026: solo despues de que la persona responda "
+                         "'listo' al plan, y al menos 120 s despues de ese 'listo'")
     ap.add_argument("--entrenar", type=float, default=20)
     ap.add_argument("--registro", nargs="*", default=[], help="columna=valor para registro_sesiones.csv")
     a = ap.parse_args()
@@ -51,7 +53,11 @@ def main() -> int:
         print(f"ERROR: {destino_local} ya existe")
         return 1
     ahora = time.time()
-    s0 = math.ceil((ahora + a.anticipacion) / 30) * 30          # redondeado a :00 o :30
+    hh, mm, ss = (int(x) for x in a.inicio.split(":"))
+    s0 = datetime.now().replace(hour=hh, minute=mm, second=ss, microsecond=0).timestamp()
+    if s0 - ahora < 120:
+        print(f"ERROR: S0 {a.inicio} esta a {s0 - ahora:.0f} s; la regla exige al menos 120 s tras el 'listo'.")
+        return 1
     E = a.entrenar
     plan = [(s0, "excluir"), (s0 + 75, "vacia"), (s0 + 135, "excluir"), (s0 + 150, "caminando"),
             (s0 + 210, "excluir"), (s0 + 220, "sentada_quieta"), (s0 + 280, "excluir")]

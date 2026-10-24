@@ -67,3 +67,24 @@ Graba al menos **2 tomas**. Entre tomas no hace falta detener la captura.
   reconstruyó a partir de los datos registrados por USB durante la grabación; no es una transmisión en vivo."
 - No presentar como resultado la presencia quieta ni cifras de exactitud: el video muestra el funcionamiento,
   no una validación.
+
+
+## Ética en el salón (prueba del 25/10/2026)
+
+**Aviso para leer a los alumnos antes de empezar** (≈1 min):
+
+> "Esta placa pequeña es un sensor WiFi del proyecto AURA. No tiene cámara ni micrófono: **no graba imagen ni
+> audio**. Lo que mide es cómo cambian las señales de WiFi entre la placa y este celular cuando alguien se mueve
+> cerca. En la pantalla verán esas señales y si el sistema detecta movimiento. Los datos que se guardan son
+> números de la señal y la hora; no llevan nombres. Se usarán **solo para este curso y para la investigación**
+> del proyecto, y no se publicarán datos que permitan identificar a nadie. En las pruebas etiquetadas va a
+> participar solo quien acepte; quien no quiera, no participa y no pasa nada. Pueden preguntar lo que quieran."
+
+**Reglas:**
+- En las **sesiones etiquetadas** (las que se marcan con E/S/M) solo participan como persona observada quienes
+  **acepten** después del aviso. Anotar en la hoja solo un código (P1, P2…) y la hora; nunca nombres en los datos.
+- Quien no acepte puede quedarse en el salón, idealmente lejos de la línea placa–celular; su presencia se anota
+  como "salón ocupado" y no se evalúa a esa persona.
+- Nada de fotos ni video de alumnos que no lo hayan aceptado expresamente; si se graba para el proyecto, encuadrar
+  la placa, la pantalla y a la persona que aceptó.
+- Las capturas se copian a tu memoria y se **borran** de equipos ajenos; nunca se suben a git ni a internet.

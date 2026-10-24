@@ -10,7 +10,9 @@ Contenido:
 |---|---|
 | `scripts\capturar.py` | Captura cruda del USB a `datos\crudos\<ID>.csv` |
 | `scripts\cargar_credenciales.py` | Carga el WiFi del lugar en la placa (`--solo wifi1_ssid`, …) |
-| `scripts\visor.py` | Reproduce la captura y exporta el panel cuadro a cuadro |
+| `scripts\visor.py` | Panel EN VIVO (mapa de calor, señal, estado; teclas E/S/M; graba) y reproducción |
+| `scripts\marcas_a_etiquetas.py`, `scripts\convertir_log_celular.py` | Marcas de teclado → etiquetas; registro del celular → formato de captura |
+| `GUIA_CAMPO.md` | Guía de campo de una página (salón, laptop ajena, plan B) |
 | `scripts\ip_placa_usb.py` | Lee por USB la IP que obtuvo la placa (para el paso 4b) |
 | `scripts\receptor_local.py` | Recibe por WiFi el CSI crudo (mapa de calor) conectándose a la IP de la placa |
 | `scripts\aura_proto.py`, `scripts\fb_rest.py` | Módulos que usan los anteriores (sin datos) |
@@ -48,6 +50,21 @@ Si PowerShell bloquea scripts, no hace falta activarlos: siempre se usa `.\.venv
 ```powershell
 .\.venv\Scripts\python.exe scripts\cargar_credenciales.py --puerto COM7 --listar
 ```
+
+## 2b. Prueba de 10 minutos en casa (laptop nueva, por ejemplo la HP)
+
+Hazla en casa antes de salir, con la placa conectada por USB y la laptop en el **mismo WiFi** que la placa.
+
+| Min | Paso | Éxito |
+|---|---|---|
+| 0–1 | `.\.venv\Scripts\python.exe -m serial.tools.list_ports -v` | aparece `303A:1001` (anota el COM) |
+| 1–2 | `.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --puerto COMx --listar` | muestra los nombres de las claves |
+| 2–4 | `.\.venv\Scripts\python.exe scripts\ip_placa_usb.py --puerto COMx --reiniciar` | imprime una IP; espera 1 min |
+| 4–8 | `.\.venv\Scripts\python.exe scripts\visor.py --vivo --ip <IP> --puerto COMx --id-sesion PRUEBA_HP` | mapa de calor que se mueve, señal y umbrales; al caminar cerca, la señal sube. Pulsa **E**, **S** y **M**: aparecen arriba a la izquierda |
+| 8–9 | Cierra la ventana; revisa `datos\crudos\` | están `PRUEBA_HP.csv`, `PRUEBA_HP_local.csv` y `PRUEBA_HP_marcas.csv` |
+| 9–10 | `.\.venv\Scripts\python.exe scripts\visor.py --reproducir datos\crudos\PRUEBA_HP_local.csv` | el panel se reconstruye |
+
+Si falla el paso de la IP o el mapa de calor, el plan B (solo USB) sigue sirviendo: `visor.py --vivo --puerto COMx`.
 
 ## 3. Cargar el WiFi del lugar (red principal)
 

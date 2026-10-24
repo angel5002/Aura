@@ -130,7 +130,19 @@ def main() -> int:
                     help="Reinicia la placa al empezar con 'AURA REBOOT' (aura_nodo), para capturar el arranque")
     ap.add_argument("--reiniciar-rts", action="store_true",
                     help="Reinicio por RTS (solo para firmware sin consola AURA; evitar con aura_nodo)")
+    ap.add_argument("--teclas", action="store_true",
+                    help="Marcar con el teclado en esta ventana: E = entra a la zona, S = sale, M = marca libre "
+                         "(se guardan en <id>_marcas.csv y como lineas #AURA en la captura)")
     args = ap.parse_args()
+    teclado = None
+    if args.teclas:
+        try:
+            import msvcrt as teclado     # Windows: lectura de teclas sin esperar Enter
+        except ImportError:
+            print("ERROR: --teclas solo funciona en Windows.")
+            return 1
+    marcas = DIR_CRUDOS / f"{args.id_sesion}_marcas.csv"
+    significado = {"E": "entra a la zona", "S": "sale de la zona", "M": "marca libre"}
 
     try:
         destino = nuevo_destino(args.id_sesion)
@@ -149,6 +161,8 @@ def main() -> int:
     t_aviso = t_inicio + 5
     print(f"Capturando {args.duracion:.0f} s de {args.puerto} -> {destino}")
     print("Ctrl+C para detener antes de tiempo.")
+    if teclado:
+        print("Teclas (con ESTA ventana activa): E = entra a la zona, S = sale, M = marca libre")
 
     try:
         with open(destino, "w", newline="", encoding="utf-8") as f:
@@ -159,6 +173,18 @@ def main() -> int:
             elif args.reiniciar_rts:
                 lector.reiniciar_placa()
             while time.time() < t_fin:
+                while teclado and teclado.kbhit():
+                    tecla = teclado.getwch().upper()
+                    if tecla in significado:
+                        t_m = time.time()
+                        nuevo = not marcas.exists()
+                        with open(marcas, "a", newline="", encoding="utf-8") as fm:
+                            wm = csv.writer(fm)
+                            if nuevo:
+                                wm.writerow(["t_pc_unix", "tecla", "significado"])
+                            wm.writerow([f"{t_m:.6f}", tecla, significado[tecla]])
+                        w.writerow([f"{t_m:.6f}", MARCA_AURA + f"marca {tecla} ({significado[tecla]})"])
+                        print(f"  [{t_m - t_inicio:6.1f} s] MARCA {tecla}: {significado[tecla]}", flush=True)
                 bruto = lector.leer_linea()
                 for t_ev, texto in lector.eventos:
                     w.writerow([f"{t_ev:.6f}", MARCA_AURA + texto])
