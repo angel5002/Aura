@@ -38,11 +38,17 @@ DIR_CRUDOS = RAIZ / "datos" / "crudos"
 DIR_PROCESADOS = RAIZ / "datos" / "procesados"
 
 CONDICIONES = ("vacia", "caminando", "sentada_quieta")
+EXCLUIR = "excluir"     # transiciones (salir, entrar, sentarse): no entran en las metricas
 DETECTORES = {
-    # nombre: (campo HMS, condiciones que cuentan como positivo)
-    "movimiento": ("motion_status", {"caminando"}),
-    "presencia": ("presence_someone_status", {"caminando", "sentada_quieta"}),
+    # nombre: (campo, condiciones que cuentan como positivo). "crudo" = cada muestra del firmware;
+    # "suav" = suavizado causal en la rejilla de 1 s (ver suavizar()).
+    "movimiento crudo": ("motion_status", {"caminando"}),
+    "movimiento suav": ("motion_suav", {"caminando"}),
+    "presencia crudo": ("presence_someone_status", {"caminando", "sentada_quieta"}),
+    "presencia suav": ("presence_suav", {"caminando", "sentada_quieta"}),
 }
+RETENCION_MOV_S = 10    # = CONFIG_AURA_RETENCION_MOV_S: la placa mantiene MOVIMIENTO 10 s tras el ultimo positivo
+VENTANA_PRES_S = 5      # presencia suavizada: mayoria de las muestras de los ultimos 5 s
 
 
 def leer_hms(ruta: Path, peer: str) -> tuple[pd.DataFrame, dict]:
@@ -92,14 +98,25 @@ def leer_verdad(id_sesion: str, condicion_registro: str | None) -> pd.DataFrame:
         tramos = pd.DataFrame({"t_ini": [0.0], "t_fin": [np.inf], "condicion": [condicion_registro.strip()]})
     else:
         raise ValueError(f"{id_sesion}: no hay {etiquetas.name} ni condicion_real en el registro")
-    malas = set(tramos["condicion"]) - set(CONDICIONES)
+    malas = set(tramos["condicion"]) - set(CONDICIONES) - {EXCLUIR}
     if malas:
-        raise ValueError(f"{id_sesion}: condiciones desconocidas {malas}; use {CONDICIONES}")
+        raise ValueError(f"{id_sesion}: condiciones desconocidas {malas}; use {CONDICIONES} o '{EXCLUIR}'")
     return tramos
 
 
-def en_rejilla(muestras: pd.DataFrame, tramos: pd.DataFrame, paso: float) -> pd.DataFrame:
-    """Lleva las muestras a una rejilla de 'paso' segundos (último valor) y añade la condición real."""
+def suavizar(rej: pd.DataFrame, paso: float) -> pd.DataFrame:
+    """Suavizado causal (solo usa el pasado): movimiento = algun positivo en los ultimos RETENCION_MOV_S
+    (lo mismo que hace la placa para el estado MOVIMIENTO); presencia = mayoria en los ultimos VENTANA_PRES_S."""
+    n_mov = max(1, int(round(RETENCION_MOV_S / paso)))
+    n_pres = max(1, int(round(VENTANA_PRES_S / paso)))
+    rej["motion_suav"] = rej["motion_status"].astype(int).rolling(n_mov, min_periods=1).max().astype(bool)
+    rej["presence_suav"] = rej["presence_someone_status"].astype(float).rolling(n_pres, min_periods=1).mean() >= 0.5
+    return rej
+
+
+def en_rejilla(muestras: pd.DataFrame, tramos: pd.DataFrame, paso: float, con_excluir: bool = False) -> pd.DataFrame:
+    """Lleva las muestras a una rejilla de 'paso' segundos (último valor) y añade la condición real.
+    Con con_excluir=False se quitan las filas de transicion ('excluir') y las que no tienen etiqueta."""
     t = np.arange(muestras["t_rel"].iloc[0], muestras["t_rel"].iloc[-1], paso)
     idx = np.searchsorted(muestras["t_rel"].to_numpy(), t, side="right") - 1
     rej = muestras.iloc[idx].reset_index(drop=True)
@@ -108,18 +125,26 @@ def en_rejilla(muestras: pd.DataFrame, tramos: pd.DataFrame, paso: float) -> pd.
     rej["condicion"] = np.where(i_tramo >= 0, tramos["condicion"].to_numpy()[np.clip(i_tramo, 0, None)], None)
     t_cambio = tramos["t_ini"].to_numpy()[np.clip(i_tramo, 0, None)]
     rej["seg_desde_cambio"] = np.where(i_tramo >= 0, t - t_cambio, np.nan)
-    return rej[rej["condicion"].notna()].reset_index(drop=True)
+    rej = suavizar(rej, paso)
+    if con_excluir:
+        return rej[rej["condicion"].notna()].reset_index(drop=True)
+    return rej[rej["condicion"].notna() & (rej["condicion"] != EXCLUIR)].reset_index(drop=True)
 
 
-def latencias(rej: pd.DataFrame, tramos: pd.DataFrame, campo: str, positivas: set) -> list[dict]:
-    """Para cada cambio de verdad negativo<->positivo, segundos hasta que el detector lo refleja."""
+def latencias(rej_todo: pd.DataFrame, tramos: pd.DataFrame, campo: str, positivas: set) -> list[dict]:
+    """Para cada cambio de verdad negativo<->positivo (entre tramos reales, saltando los 'excluir'), segundos
+    hasta que el detector lo refleja, medidos desde el CAMBIO FISICO: un inicio (la persona entra / empieza a
+    moverse) desde el comienzo del tramo nuevo; un fin (deja de moverse / sale) desde el final del tramo
+    anterior, aunque entre medio haya una transicion. rej_todo debe incluir las filas 'excluir'."""
+    reales = tramos[tramos["condicion"] != EXCLUIR].reset_index(drop=True)
     out = []
-    for i in range(1, len(tramos)):
-        antes, ahora = tramos["condicion"].iloc[i - 1] in positivas, tramos["condicion"].iloc[i] in positivas
+    for i in range(1, len(reales)):
+        antes, ahora = reales["condicion"].iloc[i - 1] in positivas, reales["condicion"].iloc[i] in positivas
         if antes == ahora:
             continue
-        t0, t1 = tramos["t_ini"].iloc[i], tramos["t_fin"].iloc[i]
-        tramo = rej[(rej["t"] >= t0) & (rej["t"] < t1)]
+        t0 = reales["t_ini"].iloc[i] if ahora else reales["t_fin"].iloc[i - 1]
+        t1 = reales["t_fin"].iloc[i]
+        tramo = rej_todo[(rej_todo["t"] >= t0) & (rej_todo["t"] < t1)]
         acierto = tramo[tramo[campo] == ahora]
         out.append({
             "tipo": "inicio" if ahora else "fin",
@@ -178,6 +203,7 @@ def main() -> int:
     for sid in args.sesiones:
         fila = registro[registro["id_sesion"] == sid]
         archivo = fila["archivo_datos"].iloc[0] if len(fila) and fila["archivo_datos"].iloc[0] else f"{sid}.csv"
+        archivo = archivo.split(";")[0].strip()        # puede listar USB y via local: se evalua la captura USB
         ruta = Path(archivo) if Path(archivo).is_absolute() else DIR_CRUDOS / Path(archivo).name
         cond = fila["condicion_real"].iloc[0] if len(fila) and "condicion_real" in fila else ""
         if not ruta.exists():
@@ -203,16 +229,17 @@ def main() -> int:
 
         tramos = leer_verdad(sid, cond)
         rej = en_rejilla(muestras, tramos, args.paso)
+        rej_todo = en_rejilla(muestras, tramos, args.paso, con_excluir=True)
         rej["sesion"] = sid
         rejillas.append(rej)
         DIR_PROCESADOS.mkdir(parents=True, exist_ok=True)
         figura(rej, sid, DIR_PROCESADOS / f"{sid}_deteccion.png")
 
         for nombre, (campo, positivas) in DETECTORES.items():
-            for lat in latencias(rej, tramos, campo, positivas):
+            for lat in latencias(rej_todo, tramos, campo, positivas):
                 todas_lat.append({"sesion": sid, "detector": nombre, **lat})
             por_cond = rej.groupby("condicion")[campo].mean()
-            print(f"  {nombre:<10} % de tiempo detectado por condición: "
+            print(f"  {nombre:<17} % de tiempo detectado por condición: "
                   + ", ".join(f"{c}={100 * v:.0f}%" for c, v in por_cond.items()))
 
     if not rejillas:
