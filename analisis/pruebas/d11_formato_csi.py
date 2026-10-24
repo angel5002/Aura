@@ -53,16 +53,38 @@ def extender12(raw: bytes) -> np.ndarray:
     return (((w << 4) & 0xFFFF).astype(np.uint16).view(np.int16) >> 4).astype(np.int32)
 
 
+def leer_archivo(ruta: str) -> list:
+    """Paquetes 'csi' de una captura de la via local ya guardada (receptor_local.py)."""
+    import csv
+    from aura_proto import parsear_datagrama
+    pk = []
+    with open(ruta, newline="", encoding="utf-8") as f:
+        for fila in csv.reader(f):
+            if len(fila) < 2:
+                continue
+            d = parsear_datagrama(fila[1])
+            if d and d.tipo == "csi":
+                try:
+                    pk.append(json.loads(d.cuerpo))
+                except json.JSONDecodeError:
+                    pass
+    return pk
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ip")
     ap.add_argument("--segundos", type=float, default=120)
+    ap.add_argument("--archivo", help="analizar una captura de la via local ya guardada (*_local.csv)")
     a = ap.parse_args()
-    ip = ip_placa(a.ip)
-    col = ColeccionCSI()
-    h, res = recibir_en_hilo(ip, "D11", a.segundos, col)
-    h.join()
-    pk = col.csi
+    if a.archivo:
+        pk = leer_archivo(a.archivo)
+    else:
+        ip = ip_placa(a.ip)
+        col = ColeccionCSI()
+        h, res = recibir_en_hilo(ip, "D11", a.segundos, col)
+        h.join()
+        pk = col.csi
     if not pk:
         registrar("D11 formato CSI", "sin paquetes csi", "ver plan", "FALLIDA", "¿hay receptor suscrito y AP activo?")
         return 1
@@ -126,8 +148,15 @@ def main() -> int:
         return float(np.nanmedian(rel))
     r0, r1 = rugosidad(V.astype(float), 0), rugosidad(V.astype(float), 1)
 
+    # f) ancho de valor (informativo): con 12 bits guardados en palabras de 16 bits, el byte alto de cada palabra
+    #    solo usa los 4 bits bajos (0x00-0x0F); con valores de 8 bits ese byte seria un valor mas y se repartiria.
+    altos = np.concatenate([np.frombuffer(r, dtype=np.uint8)[1::2] for r in raws]) if raws else np.array([])
+    frac_12 = float((altos <= 0x0F).mean()) if len(altos) else float("nan")
+    n_sub = V.shape[1] // 2 if es16 else V.shape[1] // 2
+
+    origen = a.archivo or "captura en vivo"
     registrar("D11a longitud por paquete", "; ".join(txt_a), "constante por formato y coincide con la tabla de IDF",
-              "APROBADA" if ok_a else "FALLIDA", f"{len(pk)} paquetes csi")
+              "APROBADA" if ok_a else "FALLIDA", f"{len(pk)} paquetes csi; {origen}")
     registrar("D11b subportadoras nulas", f"posiciones siempre nulas en raw ({'16' if es16 else '8'} bits): {nulos}",
               "conjunto estable (>= 95 % de paquetes)", "APROBADA" if ok_b else "FALLIDA")
     registrar("D11c transformacion raw -> valid", txt_c, ">= 99 % con |error| <= 1",
@@ -137,6 +166,13 @@ def main() -> int:
     registrar("D11e orden Re/Im (informativo)", f"rugosidad de amplitud emparejando desde 0: {r0:.3f}, desde 1: {r1:.3f}",
               "no verificable con una sola placa; IDF documenta (Im, Re)", "NO EJECUTADA",
               "el orden Im/Re no se puede distinguir sin referencia externa; la amplitud no depende de el")
+    registrar("D11f ancho de valor y subportadoras (informativo)",
+              f"{100 * frac_12:.2f} % de los bytes altos de cada palabra en 0x00-0x0F -> "
+              f"{'12 bits en palabras de 16' if frac_12 >= 0.99 else 'NO compatible con 12 bits en 16'}; "
+              f"valid = {V.shape[1]} valores = {n_sub} subportadoras complejas (Im, Re)",
+              "informativo: compara con IDF (106 B = 53 subp. en 8 bits) y esp-csi (C5 LLTF 12 bits: 52 valores = 26 subp.)",
+              "NO EJECUTADA", "lltf_bit_mode por defecto = 12 bits (esp_wifi_he_types.h); esp-radar y csi_recv_router "
+              "leen 16 bits con extension de 12")
     return 0 if (ok_a and ok_b and ok_c and ok_d) else 1
 
 

@@ -270,3 +270,32 @@ emisores de las tormentas de ARP. T1–T3 y T3b APROBADAS; MAC verificada; graba
   criterio (≥ 30 KB medido) no se cambia. **No hubo asignaciones fallidas ni reinicios**; CSI 105,5/s, p95 ≤ 61 ms.
 - **Decisión del 24/10/2026**: la **0.1.3 en modo solo local** (sin `fb_pass`, diagnóstico incluido) es la
   versión para el video. No se compila una versión sin diagnóstico antes del video.
+
+
+## Formato del CSI crudo del C5 (D11 con datos reales, 24/10/2026)
+
+Captura `F1_sin_regla_local.csv` (5 min, 30.159 paquetes `csi`, todos LLTF: rx_format 4, cwb 0).
+
+- **Lo que entrega la placa**: `len` = 106 bytes = **53 palabras de 16 bits con valores de 12 bits con signo**
+  (modo `lltf_bit_mode` = 0, el valor por defecto según `esp_wifi_he_types.h`: "0: 12-bit, 1: 8-bit, default:
+  12-bit"). Evidencia: en el 100,00 % de las palabras el byte alto está en 0x00–0x0F (solo se usan los 4 bits
+  bajos, como corresponde a 12 bits); con valores de 8 bits ese byte sería un valor más y se repartiría.
+  La palabra 53 vale 0 en el 100 % de los paquetes (relleno).
+- **Subportadoras**: las 52 primeras palabras son **26 pares (imaginario, real) = 26 subportadoras complejas**.
+- **Comparación**:
+  - IDF v5.5 (`wifi.rst`, sección esp32c5): LLTF "0~26, -26~-1", 106 bytes, "two bytes of signed characters,
+    imaginary part followed by real part" → 53 subportadoras **en el modo de 8 bits**. Esa tabla no describe el
+    modo de 12 bits que usa la placa.
+  - esp-radar (`copy_subcarrier_data`, `csi_write_frame_to_ring`): en modo de 16 bits exige `len == 106`, lee
+    palabras uint16 con extensión de signo de 12 bits en los rangos de bytes {0,52} y {52,104} (52 valores) y
+    calcula la amplitud con 4 bytes por subportadora → 26 subportadoras.
+  - esp-csi `csi_recv_router` (C5, LLTF forzado): imprime `(len − 2) / 2 = 52` valores de 12 bits; el parser
+    `csi_data_read_parse.py` tiene la rama `csi_data_len == 52` → 26 subportadoras complejas (real en la
+    posición impar, imaginario en la par).
+- **Conclusión**: el decodificador de AURA (`aura_proto.decodificar_csi`) coincide con los dos parsers oficiales
+  (26 subportadoras de 12 bits); **no se cambia**. El mapa de calor (26 filas) y los datos guardados son
+  correctos; el buffer `raw` completo (106 B) se guarda siempre, así que no se pierde información.
+- **Abierto**: qué subportadoras físicas son esas 26 no está documentado para el modo de 12 bits. El visor
+  oficial agrupa los 52 valores en dos mitades de 13 subportadoras ((0,12) y (13,26)), lo que sugiere que
+  cubren todo el canal (−26..26) con paso 2, pero es una inferencia, no una verificación. Para confirmarlo
+  haría falta capturar con `lltf_bit_mode` = 1 (8 bits, 53 subportadoras) y comparar: no se hace antes del video.
