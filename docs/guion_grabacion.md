@@ -13,7 +13,10 @@ muestra si antes se entrenó la habitación vacía; sin entrenamiento el panel d
 
 ## Material
 
-- Placa B con **0.1.3** (la versión más estable observada: 74 min sin fallos, incluida una tormenta de ARP).
+- Placa B con **0.1.3 en modo solo local** (sin `fb_pass`: la nube no abre conexiones). Decisión del 24/10:
+  45 min sin tormenta APROBADA; con tormenta de ARP, 0 asignaciones fallidas y 0 reinicios, pero mínimo de
+  26,4 KB (FALLIDA por el criterio de 30 KB). **Antes de grabar, confirma que la PC 192.168.0.89 esté apagada**
+  si el video se graba en casa.
 - Cable USB-C de datos y la **laptop prestada** con el kit (`C:\aura\kit_captura`, ver su `GUIA.md`).
 - Red del departamento (principal) o tu **hotspot** (respaldo, ya cargado en la placa).
 - Cámara o celular para grabar, con trípode.

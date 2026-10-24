@@ -11,6 +11,8 @@ Contenido:
 | `scripts\capturar.py` | Captura cruda del USB a `datos\crudos\<ID>.csv` |
 | `scripts\cargar_credenciales.py` | Carga el WiFi del lugar en la placa (`--solo wifi1_ssid`, …) |
 | `scripts\visor.py` | Reproduce la captura y exporta el panel cuadro a cuadro |
+| `scripts\ip_placa_usb.py` | Lee por USB la IP que obtuvo la placa (para el paso 4b) |
+| `scripts\receptor_local.py` | Recibe por WiFi el CSI crudo (mapa de calor) conectándose a la IP de la placa |
 | `scripts\aura_proto.py`, `scripts\fb_rest.py` | Módulos que usan los anteriores (sin datos) |
 | `requirements.txt` | pyserial, numpy y matplotlib |
 
@@ -76,6 +78,40 @@ Si PowerShell bloquea scripts, no hace falta activarlos: siempre se usa `.\.venv
    se reconecta solo y lo anota en el archivo.
 5. El archivo queda en `C:\aura_kit\datos\crudos\V001.csv`. Si `V001` ya existe, usa otro ID (no se sobrescribe).
 
+## 4b. (Opcional) Recibir también el CSI crudo por WiFi, para el mapa de calor
+
+Por USB no llega el CSI crudo. Para tener el mapa de calor, la laptop recibe además la vía local de la placa
+**conectándose directamente a su IP**: no usa el descubrimiento por broadcast, **no necesita ninguna regla de
+firewall ni permisos de administrador** (probado el 24/10/2026 con la regla desactivada: 5 min, 0 % de pérdida,
+~100 paquetes CSI/s).
+
+**Condición: la laptop debe estar conectada a la MISMA red WiFi que la placa** (la del departamento, o tu hotspot
+si la placa está en el respaldo). En redes de invitados que aíslan a los clientes entre sí no funciona: en ese
+caso graba solo con USB (paso 4).
+
+Orden (el puerto COM no se puede abrir desde dos programas a la vez):
+
+1. Con la placa ya conectada al WiFi, lee su IP por USB (si no la ve en 5 s, reinicia la placa y espera ~15 s):
+
+```powershell
+.\.venv\Scripts\python.exe scripts\ip_placa_usb.py --puerto COM7 --reiniciar
+```
+
+   Muestra algo como `192.168.1.23`. Si se reinició la placa, espera **1 minuto** (calibración).
+2. En una **primera** ventana de PowerShell, la captura USB (paso 4).
+3. En una **segunda** ventana, el receptor por WiFi con la misma duración:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\receptor_local.py --id-sesion V001 --duracion 2400 --ip 192.168.1.23 --sin-bind
+```
+
+   Cada 5 s muestra `csi ~100/s, hms ~17/s | perdida 0.00%`. Si `csi` no aparece en 15 s, revisa que la laptop
+   esté en la misma red; si no se puede, sigue solo con USB.
+4. El archivo queda en `datos\crudos\V001_local.csv`.
+
+En la prueba del 24/10 Windows no mostró ningún aviso. Si aparece una ventana de **Seguridad de Windows**, no hace
+falta permitir nada: ciérrala y comprueba que el receptor siga mostrando `csi ~100/s`.
+
 ## 5. Reconstruir el panel (modo reproducción)
 
 Para ver el panel en pantalla:
@@ -94,6 +130,10 @@ Para exportar un PNG por cuadro (10 por segundo) y montarlo sobre el video:
   **"Reproducción de datos registrados durante la grabación"**.
 - Por USB no llega el CSI crudo: el mapa de calor queda vacío y el panel muestra la señal del detector, sus
   umbrales y el estado.
+- **Si hiciste el paso 4b**, reproduce el archivo de la vía local, que trae el CSI crudo y las muestras del
+  detector (panel completo, con mapa de calor):
+  `.\.venv\Scripts\python.exe scripts\visor.py --reproducir datos\crudos\V001_local.csv --exportar cuadros_V001 --fps 10`.
+  Su hora es la de la placa (SNTP); alinéalo igual con la palmada. Guarda también `V001.csv` (USB) como respaldo.
 - Para alinear: busca el pico de la palmada en el panel y hazlo coincidir con la palmada del video.
 
 ## 6. Al terminar (datos sensibles)

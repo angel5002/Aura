@@ -258,3 +258,15 @@ emisores de las tormentas de ARP. T1–T3 y T3b APROBADAS; MAC verificada; graba
   no las puede producir, y am/ad > 800 exigiría amplitudes ≥ 10^13.
 - Costo de memoria del diagnóstico: ~9,8 KB. 0.1.3 descontándolo: mínimo por intervalo mediana 48,3 KB, p5 27,4,
   mínimo 18,6 KB; intervalos < 30 KB: 48 de 438 (medido: 142).
+
+
+## Memoria en modo solo local (0.1.3 sin `fb_pass`) y decisión para el video (23–24/10/2026)
+
+- **45 min sin tormenta: APROBADA** (`M1_013_local.csv`): 0 asignaciones fallidas, mínimo por intervalo 34,5 KB
+  (mediana 61,6), CSI 100,6/s (−0,8 %), p95 ≤ 61 ms, 0 reinicios.
+- **20 min con tormenta de ARP: FALLIDA** (`M2_013_tormenta.csv`, desde 18:41:25; 120 de 120 intervalos con
+  tormenta, mediana 1398 broadcast/10 s): el mínimo por intervalo bajó a **26,4 KB** (2 de 120 intervalos < 30 KB;
+  < 20 ms, sin episodios del muestreador). El valor medido **incluye ~9,8 KB que ocupa el diagnóstico**; el
+  criterio (≥ 30 KB medido) no se cambia. **No hubo asignaciones fallidas ni reinicios**; CSI 105,5/s, p95 ≤ 61 ms.
+- **Decisión del 24/10/2026**: la **0.1.3 en modo solo local** (sin `fb_pass`, diagnóstico incluido) es la
+  versión para el video. No se compila una versión sin diagnóstico antes del video.
