@@ -37,7 +37,7 @@ def hora(t: float) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--puerto", required=True)
+    ap.add_argument("--puerto", default="auto", help="COM de la placa o auto (por defecto: detecta la placa por VID 303A)")
     ap.add_argument("--ip", required=True)
     ap.add_argument("--id-sesion", required=True)
     ap.add_argument("--inicio", required=True,

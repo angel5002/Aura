@@ -33,7 +33,7 @@ def buscar(lector: LectorSerie, segundos: float) -> str | None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="IP de la placa leida por USB.")
-    ap.add_argument("--puerto", required=True)
+    ap.add_argument("--puerto", default="auto", help="COM de la placa o auto (por defecto: detecta la placa por VID 303A)")
     ap.add_argument("--espera", type=float, default=5, help="segundos escuchando antes de reiniciar")
     ap.add_argument("--reiniciar", action="store_true", help="si no aparece, reiniciar con AURA REBOOT y esperar")
     a = ap.parse_args()

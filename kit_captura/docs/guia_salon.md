@@ -52,12 +52,12 @@ indicador grande con el estado y "movimiento: SÍ/no". Probado el 24/10 con la p
 vez, 0 % de pérdida). Graba mientras muestra.
 
 1. Laptop conectada al **mismo hotspot** que la placa.
-2. IP de la placa: `python scripts\ip_placa_usb.py --puerto COMx --reiniciar` (reinicia la placa: espera 1 min).
-3. Visor: `python scripts\visor.py --vivo --ip <IP> --puerto COMx --id-sesion C001`
+2. IP de la placa: `python scripts\ip_placa_usb.py --reiniciar` (reinicia la placa: espera 1 min).
+3. Visor: `python scripts\visor.py --vivo --ip <IP> --puerto auto --id-sesion C001`
    - Graba `datos\crudos\C001.csv` (USB) y `C001_local.csv` (CSI crudo).
    - **Teclas** (con la ventana del visor activa): **E** = la persona observada entra a la zona, **S** = sale,
      **M** = marca libre. Se guardan en `C001_marcas.csv` con la hora de cada pulsación y se ven arriba a la izquierda.
-   - Sin red (plan B): `python scripts\visor.py --vivo --puerto COMx --id-sesion C001` (señal y estado por USB, sin
+   - Sin red (plan B): `python scripts\visor.py --vivo --puerto auto --id-sesion C001` (señal y estado por USB, sin
      mapa de calor).
    - Para cerrar: cerrar la ventana (o Ctrl+W).
 4. Después: `python marcas_a_etiquetas.py --id-sesion C001` y `python evaluar_deteccion.py --sesiones C001`
@@ -67,7 +67,7 @@ vez, 0 % de pérdida). Graba mientras muestra.
 ## D. Etiquetado con teclas, guía de campo y plan B
 
 - Teclas E/S/M en el visor en vivo (arriba) o, sin visor, en la captura de consola:
-  `python scripts\capturar.py --puerto COMx --id-sesion C001 --duracion 1800 --teclas` (con esa ventana activa).
+  `python scripts\capturar.py --id-sesion C001 --duracion 1800 --teclas` (con esa ventana activa).
 - Guía de campo de una página: `kit_captura\GUIA_CAMPO.md`. Plan B: solo USB (capturar.py o el visor con `--puerto`).
 
 ## E. Con celular, sin laptop

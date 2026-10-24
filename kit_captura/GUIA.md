@@ -1,6 +1,9 @@
 # Kit de captura portátil de AURA (modo solo local, captura por USB)
 
-Para usar en una laptop **ajena** con Windows 10/11. El kit **no trae ningún secreto**: ni la configuración de
+Versión del kit: ver el archivo `VERSION` (cambios en `CAMBIOS.md`). **Solo Windows 10/11** con **Python 3.12 de
+64 bits** (probado con 3.12.10; no usar 3.13 ni 3.11: las versiones fijadas de `requirements.txt` son las probadas).
+
+Para usar en cualquier PC o laptop con Windows, también **ajena**. El kit **no trae ningún secreto**: ni la configuración de
 Firebase, ni la clave local, ni contraseñas. Las contraseñas del WiFi se escriben en el momento, sin eco, y van
 directo a la placa por USB; no quedan guardadas en la laptop.
 
@@ -15,14 +18,21 @@ Contenido:
 | `GUIA_CAMPO.md` | Guía de campo de una página (salón, laptop ajena, plan B) |
 | `scripts\ip_placa_usb.py` | Lee por USB la IP que obtuvo la placa (para el paso 4b) |
 | `scripts\receptor_local.py` | Recibe por WiFi el CSI crudo (mapa de calor) conectándose a la IP de la placa |
+| `scripts\verificar_kit.py` | **Un comando que comprueba todo** (Python, dependencias, placa, USB, IP, red) y dice qué falla y cómo arreglarlo |
 | `scripts\aura_proto.py`, `scripts\fb_rest.py` | Módulos que usan los anteriores (sin datos) |
-| `requirements.txt` | pyserial, numpy y matplotlib |
+| `requirements.txt` | pyserial, numpy y matplotlib con versiones **fijadas** (`==`) |
+| `VERSION`, `CAMBIOS.md` | Versión del kit e historial de cambios |
+
+**El puerto se detecta solo**: todos los scripts buscan la placa por su identificador USB de Espressif (VID `303A`),
+así que no hace falta averiguar el COM. Si hubiera **dos placas** conectadas, el script lo dice y hay que indicar
+una con `--puerto COMx`. En el visor, `--puerto auto` activa la lectura por USB.
 
 ## 1. Instalar Python (una vez, ~10 min, con internet)
 
 1. Descarga **Python 3.12.10 para Windows (64-bit)** desde <https://www.python.org/downloads/windows/>
-   (es la misma versión del proyecto).
-2. En el instalador marca **"Add python.exe to PATH"** y pulsa **Install Now**.
+   (es la misma versión del proyecto; cualquier 3.12.x de 64 bits sirve).
+2. En el instalador marca **"Add python.exe to PATH"** y pulsa **Install Now** (incluye Tk, que usa la ventana
+   del visor). Si la PC ya tiene otro Python, no pasa nada: `py -3.12` elige el 3.12.
 3. Copia la carpeta del kit a una ruta **sin espacios ni tildes**, por ejemplo `C:\aura_kit`.
 4. Abre **PowerShell** y ejecuta:
 
@@ -34,22 +44,26 @@ py -3.12 -m venv .venv
 
 Si PowerShell bloquea scripts, no hace falta activarlos: siempre se usa `.\.venv\Scripts\python.exe` directo.
 
-## 2. Conectar la placa
+## 2. Conectar la placa y verificar el kit (un solo comando)
 
 1. Conecta la placa B con un cable USB-C **de datos** (no solo de carga). Windows 10/11 la reconoce sin
    instalar drivers (USB Serial/JTAG).
-2. Averigua el puerto:
+2. Con la laptop en el **mismo WiFi** que la placa, ejecuta:
 
 ```powershell
-.\.venv\Scripts\python.exe -m serial.tools.list_ports -v
+.\.venv\Scripts\python.exe scripts\verificar_kit.py
 ```
 
-   Busca el que diga `USB JTAG/serial debug unit` (VID:PID 303A:1001), por ejemplo `COM7`.
-3. Comprueba que la placa responde (solo muestra NOMBRES de claves, nunca valores):
-
-```powershell
-.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --puerto COM7 --listar
-```
+   En ~1 minuto revisa, en este orden: Windows y Python 3.12 de 64 bits; las dependencias y sus versiones; Tk;
+   la placa por USB (VID 303A); recepción USB durante 10 s (versión del firmware, red, muestras/s); la IP de la
+   placa; si la laptop está en la misma red; y recepción por la red durante 10 s (CSI/s y pérdida).
+   - La IP solo la informa la placa al conectarse al WiFi: si no la ve, **pregunta** si puede reiniciar la placa
+     (`AURA REBOOT`, ~1 min). Para no preguntar: `--reiniciar`; para no reiniciar nunca: `--sin-reiniciar`.
+   - No cambia la configuración de la placa ni graba nada en ella.
+   - Al final imprime cada prueba como **OK**, **AVISO** o **FALLA**, con la **solución sugerida**, y guarda el
+     informe en `verificacion_<fecha>.txt` (en la raíz del kit). Termina con `RESULTADO: TODO FUNCIONA` si está todo bien.
+   - Si solo falla la red (misma red, recepción por red), el plan B solo USB sigue sirviendo.
+3. (Opcional) Ver el COM a mano: `.\.venv\Scripts\python.exe -m serial.tools.list_ports -v` (busca `303A:1001`).
 
 ## 2b. Prueba de 10 minutos en casa (laptop nueva, por ejemplo la HP)
 
@@ -57,20 +71,19 @@ Hazla en casa antes de salir, con la placa conectada por USB y la laptop en el *
 
 | Min | Paso | Éxito |
 |---|---|---|
-| 0–1 | `.\.venv\Scripts\python.exe -m serial.tools.list_ports -v` | aparece `303A:1001` (anota el COM) |
-| 1–2 | `.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --puerto COMx --listar` | muestra los nombres de las claves |
-| 2–4 | `.\.venv\Scripts\python.exe scripts\ip_placa_usb.py --puerto COMx --reiniciar` | imprime una IP; espera 1 min |
-| 4–8 | `.\.venv\Scripts\python.exe scripts\visor.py --vivo --ip <IP> --puerto COMx --id-sesion PRUEBA_HP` | mapa de calor que se mueve, señal y umbrales; al caminar cerca, la señal sube. Pulsa **E**, **S** y **M**: aparecen arriba a la izquierda |
+| 0–2 | `.\.venv\Scripts\python.exe scripts\verificar_kit.py --reiniciar` | `RESULTADO: TODO FUNCIONA`; anota la IP de la placa del informe; espera 1 min |
+| 2–4 | `.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --listar` | muestra los nombres de las claves |
+| 4–8 | `.\.venv\Scripts\python.exe scripts\visor.py --vivo --ip <IP> --puerto auto --id-sesion PRUEBA_HP` | mapa de calor que se mueve, señal y umbrales; al caminar cerca, la señal sube. Pulsa **E**, **S** y **M**: aparecen arriba a la izquierda |
 | 8–9 | Cierra la ventana; revisa `datos\crudos\` | están `PRUEBA_HP.csv`, `PRUEBA_HP_local.csv` y `PRUEBA_HP_marcas.csv` |
 | 9–10 | `.\.venv\Scripts\python.exe scripts\visor.py --reproducir datos\crudos\PRUEBA_HP_local.csv` | el panel se reconstruye |
 
-Si falla el paso de la IP o el mapa de calor, el plan B (solo USB) sigue sirviendo: `visor.py --vivo --puerto COMx`.
+Si falla el paso de la IP o el mapa de calor, el plan B (solo USB) sigue sirviendo: `visor.py --vivo --puerto auto`.
 
 ## 3. Cargar el WiFi del lugar (red principal)
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --puerto COM7 --solo wifi1_ssid
-.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --puerto COM7 --solo wifi1_pass --reiniciar
+.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --solo wifi1_ssid
+.\.venv\Scripts\python.exe scripts\cargar_credenciales.py --solo wifi1_pass --reiniciar
 ```
 
 - Cada valor se pide **dos veces y sin eco**; si no coinciden, se vuelve a preguntar y no se envía nada.
@@ -84,7 +97,7 @@ Si falla el paso de la IP o el mapa de calor, el plan B (solo USB) sigue sirvien
 1. Inicia la captura **antes** de empezar a grabar (ejemplo: 40 min = 2400 s):
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\capturar.py --puerto COM7 --id-sesion V001 --duracion 2400
+.\.venv\Scripts\python.exe scripts\capturar.py --id-sesion V001 --duracion 2400
 ```
 
 2. Espera a que la placa lleve ~1 min encendida (calibración) antes de la primera escena.
@@ -111,7 +124,7 @@ Orden (el puerto COM no se puede abrir desde dos programas a la vez):
 1. Con la placa ya conectada al WiFi, lee su IP por USB (si no la ve en 5 s, reinicia la placa y espera ~15 s):
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\ip_placa_usb.py --puerto COM7 --reiniciar
+.\.venv\Scripts\python.exe scripts\ip_placa_usb.py --reiniciar
 ```
 
    Muestra algo como `192.168.1.23`. Si se reinició la placa, espera **1 minuto** (calibración).

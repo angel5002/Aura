@@ -342,7 +342,7 @@ def main() -> int:
     ap.add_argument("--desde", type=float, help="hora UNIX (s) de inicio de la reproduccion")
     ap.add_argument("--hasta", type=float, help="hora UNIX (s) de fin de la reproduccion")
     ap.add_argument("--rotulo", default=ROTULO_REPRODUCCION, help="texto al pie de cada cuadro ('' = sin rotulo)")
-    ap.add_argument("--puerto", help="en vivo: leer y guardar tambien el USB (plan B sin red)")
+    ap.add_argument("--puerto", help="en vivo: leer y guardar tambien el USB (COMx o auto = detectar la placa)")
     ap.add_argument("--segundos", type=float, help="en vivo: cerrar solo tras N segundos (prueba)")
     ap.add_argument("--png", type=Path, help="en vivo: sin ventana; guarda el ultimo cuadro (prueba)")
     ap.add_argument("--con-presencia", action="store_true",

@@ -29,11 +29,36 @@ MARCA_HMS = "HMS:"  # mensajes de wifi_sensing_demo (web_serial_monitor.c)
 MARCA_AURA = "#AURA "  # líneas escritas por estos scripts, no por la placa
 
 
+VID_ESPRESSIF = 0x303A   # USB nativo (USB Serial/JTAG) del ESP32-C5: VID 303A, PID 1001
+
+
+def placas_conectadas() -> list:
+    """Puertos serie de Windows cuyo dispositivo USB es de Espressif (VID 303A)."""
+    from serial.tools import list_ports
+    return [p for p in list_ports.comports() if p.vid == VID_ESPRESSIF]
+
+
+def resolver_puerto(puerto: str | None) -> str:
+    """'auto' (o vacio) -> el COM de la unica placa con VID 303A; cualquier otro valor se usa tal cual."""
+    if puerto and puerto.lower() != "auto":
+        return puerto
+    placas = placas_conectadas()
+    if len(placas) == 1:
+        print(f"Placa encontrada en {placas[0].device} (VID 303A, {placas[0].description})", flush=True)
+        return placas[0].device
+    if not placas:
+        raise serial.SerialException(
+            "no hay ninguna placa con VID 303A conectada. Revisa que el cable USB-C sea DE DATOS (muchos solo "
+            "cargan), prueba otro puerto USB y desconecta/reconecta la placa")
+    raise serial.SerialException(
+        "hay varias placas con VID 303A (" + ", ".join(p.device for p in placas) + "): indica una con --puerto COMx")
+
+
 def abrir_puerto(puerto: str, baudios: int) -> serial.Serial:
     # DTR/RTS en bajo antes de abrir: en placas ESP32 esas líneas controlan
     # EN/BOOT y dejarlas activas puede reiniciar o bloquear la placa.
     ser = serial.Serial()
-    ser.port = puerto
+    ser.port = resolver_puerto(puerto)
     ser.baudrate = baudios
     ser.timeout = 1
     ser.dtr = False
@@ -47,8 +72,9 @@ class LectorSerie:
     """Lee líneas del puerto y se reconecta si el puerto desaparece (reinicio de la placa, cable)."""
 
     def __init__(self, puerto: str, baudios: int):
-        self.puerto, self.baudios = puerto, baudios
-        self.ser = abrir_puerto(puerto, baudios)
+        # 'auto' se resuelve una sola vez: las reconexiones vuelven al mismo COM
+        self.puerto, self.baudios = resolver_puerto(puerto), baudios
+        self.ser = abrir_puerto(self.puerto, baudios)
         self.reconexiones = 0
         self.eventos = []  # (t, texto) para anotar en el archivo
 
@@ -120,7 +146,7 @@ def nuevo_destino(id_sesion: str) -> Path:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Captura cruda del puerto serie.")
-    ap.add_argument("--puerto", required=True, help="Puerto COM de la placa receptora, p. ej. COM5")
+    ap.add_argument("--puerto", default="auto", help="COM de la placa o auto (por defecto: detecta la placa por VID 303A)")
     ap.add_argument("--baudios", type=int, default=921600,
                     help="Baudios. Con el USB nativo (USB Serial/JTAG) de la FireBeetle no limitan la velocidad; "
                          "solo importan con un puente USB-UART")

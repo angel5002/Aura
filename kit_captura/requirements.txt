@@ -1,3 +1,17 @@
+# Kit de captura de AURA: dependencias FIJADAS con las versiones probadas.
+# Python soportado: 3.12 de 64 bits para Windows (probado con 3.12.10). No usar 3.13 ni 3.11: estas versiones
+# exactas pueden no tener instalador (wheel) para otra version de Python.
+# Instalar con:  .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 pyserial==3.5
 numpy==2.5.4
 matplotlib==3.11.2
+# Dependencias de matplotlib (fijadas para que la instalacion sea identica en cualquier PC)
+contourpy==1.4.0
+cycler==0.12.1
+fonttools==4.67.0
+kiwisolver==1.5.1
+packaging==26.3
+pillow==13.0.0
+pyparsing==3.3.3
+python-dateutil==3.0.0
+six==1.17.0

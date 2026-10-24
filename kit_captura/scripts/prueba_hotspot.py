@@ -32,7 +32,7 @@ RX_IP = re.compile(r"sta ip: (\d+\.\d+\.\d+\.\d+)")
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--puerto", required=True)
+    ap.add_argument("--puerto", default="auto", help="COM de la placa o auto (por defecto: detecta la placa por VID 303A)")
     ap.add_argument("--modo", choices=["sim", "reinicio"], required=True)
     ap.add_argument("--ip", help="modo sim: IP actual de la placa en la red de la casa")
     ap.add_argument("--segundos-sim", type=int, default=300)

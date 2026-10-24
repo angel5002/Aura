@@ -152,7 +152,7 @@ def clave_local(nueva: bool) -> tuple[str, str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Carga credenciales en la NVS de la placa por USB.")
-    ap.add_argument("--puerto", required=True)
+    ap.add_argument("--puerto", default="auto", help="COM de la placa o auto (por defecto: detecta la placa por VID 303A)")
     grupo = ap.add_mutually_exclusive_group()
     grupo.add_argument("--claves", nargs="+", choices=CLAVES, help="solo estas claves")
     grupo.add_argument("--solo", choices=CLAVES, help="cambiar un unico dato")
