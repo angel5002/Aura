@@ -37,7 +37,13 @@ COLORES = {"MOVIMIENTO": "#d62728", "PRESENCIA_QUIETA": "#ff7f0e", "VACIA": "#2c
 
 
 class Estado:
-    """Acumula lo necesario para dibujar el panel (ultimos VENTANA_S segundos)."""
+    """Acumula lo necesario para dibujar el panel (ultimos VENTANA_S segundos).
+
+    Por defecto la PRESENCIA se muestra como "no disponible" y el estado solo distingue CALIBRANDO / MOVIMIENTO /
+    SIN_MOVIMIENTO: sin entrenamiento valido (salon nunca vacio) o con el umbral entrenado inutil (S002, 24/10/2026)
+    la presencia no es fiable. --con-presencia vuelve a mostrar PRESENCIA_QUIETA / VACIA si hay entrenamiento."""
+
+    con_presencia = False
 
     def __init__(self):
         self.amp = deque()          # (t, vector amplitud)
@@ -47,6 +53,7 @@ class Estado:
         self.t_ultimo = None
         self.mov = False
         self.pres = False
+        self.pres_valida = False
         self.lock = threading.Lock()
 
     def agregar_datagrama(self, t_pc: float, d):
@@ -67,11 +74,12 @@ class Estado:
                                    cuerpo.get("exit_level_scaled", 0)))
                 self.mov = bool(cuerpo.get("motion_status"))
                 self.pres = bool(cuerpo.get("presence_someone_status"))
+                self.pres_valida = self.con_presencia and bool(cuerpo.get("train_thresholds_valid"))
                 if cuerpo.get("init_stage_name") != "STABLE":
                     self.estado = "CALIBRANDO"
                 elif self.mov:
                     self.estado = "MOVIMIENTO"
-                elif not cuerpo.get("train_thresholds_valid"):
+                elif not self.pres_valida:
                     self.estado = "SIN_MOVIMIENTO"
                 else:
                     self.estado = "PRESENCIA_QUIETA" if self.pres else "VACIA"
@@ -83,8 +91,11 @@ class Estado:
         with self.lock:
             self.fuente = "nube"
             self.estado = estado.get("estado", "SIN DATOS")
+            if not self.con_presencia and self.estado in ("PRESENCIA_QUIETA", "VACIA"):
+                self.estado = "SIN_MOVIMIENTO"
             self.mov = bool(estado.get("mov"))
             self.pres = estado.get("presencia") == "presente"     # "no_disponible" nunca cuenta como vacia
+            self.pres_valida = self.con_presencia and estado.get("presencia") in ("presente", "vacia")
             self.t_ultimo = time.time()
             if bloque and bloque.get("jit"):
                 jit = [int(x) / 1e4 for x in bloque["jit"].split(",") if x]
@@ -120,7 +131,8 @@ class Panel:
             amp = list(e.amp)
             senal = list(e.senal)
             estado, fuente, t_ult, mov = e.estado, e.fuente, e.t_ultimo, e.mov
-        self.indicador.set_text(f"{estado}\nmovimiento: {'SÍ' if mov else 'no'}")
+            pres = ("SÍ" if e.pres else "no") if e.pres_valida else "no disponible"
+        self.indicador.set_text(f"{estado}\nmovimiento: {'SÍ' if mov else 'no'}\npresencia: {pres}")
         self.indicador.get_bbox_patch().set_facecolor(COLORES.get(estado, "#7f7f7f"))
         t_ref = t_ref or t_ult or time.time()
         self.ax_calor.clear()
@@ -333,7 +345,11 @@ def main() -> int:
     ap.add_argument("--puerto", help="en vivo: leer y guardar tambien el USB (plan B sin red)")
     ap.add_argument("--segundos", type=float, help="en vivo: cerrar solo tras N segundos (prueba)")
     ap.add_argument("--png", type=Path, help="en vivo: sin ventana; guarda el ultimo cuadro (prueba)")
+    ap.add_argument("--con-presencia", action="store_true",
+                    help="mostrar la presencia (PRESENCIA_QUIETA/VACIA) si la placa tiene entrenamiento valido; "
+                         "por defecto se muestra 'no disponible'")
     args = ap.parse_args()
+    Estado.con_presencia = args.con_presencia
     if args.reproducir:
         return reproducir(args.reproducir, args.exportar, args.fps, args.desde, args.hasta, args.rotulo or None)
     return vivo(args.ip, args.id_sesion, args.nube, args.puerto, args.segundos, args.png)
