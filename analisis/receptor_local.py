@@ -101,9 +101,13 @@ def descubrir(timeout: float) -> dict | None:
 
 
 def recibir(ip: str, puerto: int, destino: Path, duracion: float, nombre: str = "pc",
-            al_recibir=None, informar_cada: float = 5.0, silencioso: bool = False) -> dict:
+            al_recibir=None, informar_cada: float = 5.0, silencioso: bool = False,
+            bind_explicito: bool = True) -> dict:
+    """bind_explicito=False: no se llama a bind(); el primer sendto(SUB) asigna el puerto local. Los datos de la
+    placa llegan como respuesta a ese envio (misma IP y puerto), sin abrir un puerto de escucha."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(("", 0))
+    if bind_explicito:
+        sock.bind(("", 0))
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4 * 1024 * 1024)
     sock.settimeout(0.5)
     cont = ContadorSecuencia()
@@ -178,6 +182,8 @@ def main() -> int:
     ap.add_argument("--ip", help="IP de la placa (si no, se descubre por anuncio)")
     ap.add_argument("--puerto", type=int, default=PUERTO_DATOS)
     ap.add_argument("--espera-anuncio", type=float, default=15)
+    ap.add_argument("--sin-bind", action="store_true",
+                    help="con --ip: sin bind() explicito (el primer SUB asigna el puerto local)")
     args = ap.parse_args()
 
     DIR_CRUDOS.mkdir(parents=True, exist_ok=True)
@@ -195,7 +201,7 @@ def main() -> int:
         ip = an["ip"]
         print(f"Placa encontrada: {an.get('id')} en {ip} (version {an.get('ver')})")
     print(f"Recibiendo {args.duracion:.0f} s -> {destino}")
-    r = recibir(ip, args.puerto, destino, args.duracion)
+    r = recibir(ip, args.puerto, destino, args.duracion, bind_explicito=not args.sin_bind)
     (DIR_CRUDOS / f"{args.id_sesion}_local_resumen.json").write_text(json.dumps(r, indent=2), encoding="utf-8")
     print("\n--- Resumen ---")
     for k in ("duracion_s", "por_tipo", "tasa_total_por_s", "esperados", "recibidos_unicos", "perdidos",
