@@ -3,7 +3,8 @@
 - **Equipo:** conversación de diseño (Claude en claude.ai); archivos para instalar en la PC principal.
 - **Instalación:** PC principal (`DESKTOP-7O57OU0`, usuario `usuario`, `C:\aura`), 26/10/2026, Claude Code.
 - **Commit al inicio:** `1f36374` (Kit de captura 1.1.0…).
-- **Commit final:** COMMIT_FINAL ("Registro de decisiones (ADR 0001-0017), CLAUDE.md y mapa de investigación").
+- **Commit final:** `310b4ff` ("Registro de decisiones (ADR 0001-0017), CLAUDE.md y mapa de investigación"). Este
+  dato se anotó en un commit posterior, porque un commit no puede contener su propio hash.
 
 ## Objetivo
 Instalar un sistema para que cada decisión de diseño y arquitectura quede registrada con su porqué, y
