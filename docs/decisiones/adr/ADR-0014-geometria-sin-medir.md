@@ -1,6 +1,7 @@
 # ADR-0014: No exigir medición de distancias: regla de instalación + prueba de cobertura
 
-- **Estado:** Propuesta (2026-10-24)
+- **Estado:** Reemplazada por ADR-0020 y ADR-0021 (2026-10-26). Antes: Propuesta (2026-10-24).
+- **Reemplazo:** la regla de instalación y la prueba de cobertura pasan a ADR-0020 (Aceptada); FTM, a ADR-0021 (Propuesta). Este texto no se modifica.
 - **Fecha:** 2026-10-26 (registro); decisión tomada en la fecha del estado
 - **Decide:** ambos
 - **Equipo donde se tomó:** conversación de diseño + PC principal

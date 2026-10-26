@@ -1,6 +1,7 @@
 # ADR-0012: Descartar la presencia de esp-radar y diseñar un detector propio
 
-- **Estado:** Propuesta (2026-10-24)
+- **Estado:** Reemplazada por ADR-0018 y ADR-0019 (2026-10-26). Antes: Propuesta (2026-10-24).
+- **Reemplazo:** el descarte de la presencia de esp-radar pasa a ADR-0018 (Aceptada); el diseño del detector propio, a ADR-0019 (Propuesta). Este texto no se modifica.
 - **Fecha:** 2026-10-26 (registro); decisión tomada en la fecha del estado
 - **Decide:** ambos
 - **Equipo donde se tomó:** conversación de diseño + PC principal

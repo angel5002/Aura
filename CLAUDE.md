@@ -15,7 +15,7 @@ sesión ejecuta `hostname`, `whoami` y comprueba qué rutas existen, y clasifica
 
 | Equipo | Cómo reconocerlo | Qué hay | Qué NO hay |
 |---|---|---|---|
-| **PC principal** (escritorio HP, Ethernet, usuario `USUARIO`) | existe `C:\aura` con `.git`, `C:\esp\v5.5.6\esp-idf` y `C:\aura\analisis\.venv` | repo completo, ESP-IDF v5.5.6, firmware, `secretos\`, datos crudos, Firebase CLI local | — |
+| **PC principal** (escritorio HP, Ethernet) | `hostname` = `DESKTOP-7O57OU0` y `whoami` = `desktop-7o57ou0\usuario`; existe `C:\aura` con `.git`, `C:\esp\v5.5.6\esp-idf` y `C:\aura\analisis\.venv` | repo completo, ESP-IDF v5.5.6, firmware, `secretos\`, datos crudos, Firebase CLI local | — |
 | **Laptop de campo** (prestada, usuario `user`) | existe `C:\Users\user\Desktop\CSI-Aura\aura_kit` y NO existe `C:\aura` | solo el kit de captura (lee su `PARA_CLAUDE_CODE.md`) | ESP-IDF, firmware, secretos, git del proyecto |
 | **Otro equipo / PC nueva** | ninguna de las anteriores | lo que se haya clonado | asumir nada; ver sección 7 (migración) |
 
@@ -35,7 +35,7 @@ docencia (Ciencia de Datos, Física) y la Científica Hack X 2026 (ODS 3, entreg
 Estado al 26/10/2026 (detalle en `docs/decisiones/0000_reporte_inicial.md`):
 - **Movimiento:** funciona (0,4 % de falsas alarmas en crudo, una sesión de sala vacía).
 - **Presencia quieta:** NO es fiable con esp-radar (100 % de falsos positivos por deriva). El visor la
-  muestra como "no disponible". Se está diseñando un detector propio (ADR-0012).
+  muestra como "no disponible" (ADR-0018). Se está diseñando un detector propio (ADR-0019, propuesta).
 - **Firmware de referencia:** `aura_nodo` 0.1.3 en modo solo local (sin `fb_pass`).
 - **Nube (Firebase):** diseñada y probada parcialmente; en pausa por un problema de memoria/pila de red
   sin causa identificada (ADR-0009, ADR-0010).
@@ -54,22 +54,33 @@ Placas: A `D0:CF:13:E8:FF:88`, **B `3C:DC:75:8A:6F:CC` (la única con firmware A
 5. Datos crudos (`datos\crudos\`, `registro_sesiones.csv`) fuera de git: son datos de personas.
 6. No subir datos a ninguna nube salvo lo diseñado para Firebase (resúmenes) y con autorización.
 7. El scraper de ofertas de Deisy está **fuera de este proyecto**: no tocarlo ni proponer cambios.
+8. Las cuentas (Google, Firebase u otras) las crea **Deisy**; Claude nunca crea cuentas.
+9. En `registro_sesiones.csv` y en los nombres de archivo se usan **códigos**, nunca nombres de personas.
+10. No crear archivos fuera de `C:\aura`, salvo en carpetas temporales del sistema. Usar siempre rutas
+    absolutas bajo `C:\aura` (la carpeta donde se abre la sesión puede ser otra).
 
 **Rigor**
-8. Una prueba fallida se registra como **FALLIDA**. Nunca se cambia un criterio para que apruebe; si un
-   criterio parece mal planteado, se propone el cambio y se registra como decisión.
-9. Todo firmware nuevo pasa T1–T3, T3b y **D0 (prueba de humo en la placa)** antes de cualquier otra
-   prueba. Cada versión se archiva en `firmware\versiones\<versión>` y se etiqueta en git.
-10. Distinguir siempre: **medido** / **estimado** / **inferido** / **no verificado**. Las pruebas con
+11. Una prueba fallida se registra como **FALLIDA**. Nunca se cambia un criterio para que apruebe; si un
+    criterio parece mal planteado, se propone el cambio y se registra como decisión.
+12. Todo firmware nuevo pasa T1–T3, T3b y **D0 (prueba de humo en la placa)** antes de cualquier otra
+    prueba. Cada versión se archiva en `firmware\versiones\<versión>` y se etiqueta en git.
+13. **D0**: la placa arranca, no se reinicia durante 2 minutos e informa su memoria
+    (`analisis\pruebas\d00_humo.py`, escuchando sin reiniciar por RTS).
+14. Reiniciar la placa con el comando de consola `AURA REBOOT`, no con la secuencia RTS (acordado el 23/10/2026).
+15. Distinguir siempre: **medido** / **estimado** / **inferido** / **no verificado**. Las pruebas con
     datos sintéticos demuestran que el código corre, no que funciona.
-11. No afirmar capacidades no demostradas (presencia quieta, respiración, alertas sin PC).
+16. No afirmar capacidades no demostradas (presencia quieta, respiración, alertas sin PC).
+17. No inventar formatos de datos: los lectores (parsers) se derivan de líneas reales de la placa o del
+    código fuente.
+18. Ante una falla: mostrar el error completo y proponer una solución; no reintentar en bucle.
 
 **Trabajo con Deisy**
-12. Sesiones a distancia: nunca programar horas ni iniciar cuentas regresivas sin su **"listo"**; el
+19. Sesiones a distancia: nunca programar horas ni iniciar cuentas regresivas sin su **"listo"**; el
     plan empieza al menos 2 minutos después.
-13. Avisar con anticipación cualquier acción física que deba hacer ella, y esperar confirmación.
-14. Editar CSV y archivos de texto con Python (UTF-8 sin BOM). PowerShell 5.1 agrega BOM o UTF-16.
-15. Informes al final: breves, con qué se hizo, qué falló, qué falta y qué decisiones se registraron.
+20. Avisar con anticipación cualquier acción física que deba hacer ella, y esperar confirmación.
+21. Los comandos de administrador (firewall, red, instalación como administrador) los ejecuta Deisy.
+22. Editar CSV y archivos de texto con Python (UTF-8 sin BOM). PowerShell 5.1 agrega BOM o UTF-16.
+23. Informes al final: breves, con qué se hizo, qué falló, qué falta y qué decisiones se registraron.
 
 ## 4. Registro de decisiones (obligatorio)
 
@@ -109,7 +120,8 @@ que no llega a ADR pero conviene recordar (p. ej., "se reinició la placa con AU
 ## 5. Informe de sesión (al terminar cada sesión de trabajo)
 
 Archivo: `docs/decisiones/sesiones/AAAA-MM-DD_<equipo>_<tema>.md`, con:
-- equipo, ruta de trabajo, commit al inicio y al final;
+- equipo, ruta de trabajo y commit al inicio (el commit final se consulta con `git log`; no se hacen
+  commits extra para anotar su hash);
 - objetivo de la sesión y qué se hizo;
 - resultados (con medido/estimado), pruebas aprobadas/fallidas;
 - ADR creados o modificados;
@@ -131,6 +143,10 @@ Al iniciar una sesión, lee: este archivo, `docs/decisiones/INDICE.md`, el últi
 | `docs\` | guías, plan y resultados de pruebas, evaluación, decisiones |
 | `secretos\` | **fuera de git**: credenciales y claves |
 | `datos\crudos\`, `datos\procesados\` | **fuera de git** |
+
+Notas técnicas de la PC principal:
+- El `python.exe` de `analisis\.venv` es un lanzador: los sockets pertenecen al `python.exe` base de
+  Python312, así que las reglas de firewall por programa deben apuntar a esa ruta.
 
 ## 7. Migración a otra PC
 

@@ -13,11 +13,15 @@
 | [ADR-0009](adr/ADR-0009-memoria-buffers-rx.md) | Memoria: limitar buffers de recepción WiFi a 12 y ventana BA a 6 | Aceptada (2026-10-23) | ambos |
 | [ADR-0010](adr/ADR-0010-version-video-solo-local.md) | 0.1.3 en modo solo local como versión de trabajo; nube en pausa | Aceptada (2026-10-23) | Deisy |
 | [ADR-0011](adr/ADR-0011-formato-csi-12bits.md) | Formato CSI: LLTF de 12 bits, 26 subportadoras | Aceptada (2026-10-24) | Claude (verificada) |
-| [ADR-0012](adr/ADR-0012-presencia-propia.md) | Descartar la presencia de esp-radar y diseñar un detector propio | Propuesta (2026-10-24) | ambos |
+| [ADR-0012](adr/ADR-0012-presencia-propia.md) | Descartar la presencia de esp-radar y diseñar un detector propio | Reemplazada por ADR-0018 y ADR-0019 | ambos |
 | [ADR-0013](adr/ADR-0013-kit-captura-portatil.md) | Kit de captura portátil solo para Windows | Aceptada (2026-10-24) | Deisy |
-| [ADR-0014](adr/ADR-0014-geometria-sin-medir.md) | No exigir medición de distancias: regla de instalación + prueba de cobertura | Propuesta (2026-10-24) | ambos |
+| [ADR-0014](adr/ADR-0014-geometria-sin-medir.md) | No exigir medición de distancias: regla de instalación + prueba de cobertura | Reemplazada por ADR-0020 y ADR-0021 | ambos |
 | [ADR-0015](adr/ADR-0015-control-de-versiones.md) | Git con etiquetas y archivo de binarios por versión | Aceptada (2026-10-23) | Deisy |
 | [ADR-0016](adr/ADR-0016-protocolo-de-pruebas.md) | Protocolo de pruebas: criterios fijos, D0 obligatoria, sesiones con "listo" | Aceptada (2026-10-23) | Deisy |
 | [ADR-0017](adr/ADR-0017-alcance-hackathon.md) | Alcance del hackathon: video de detección de movimiento | Aceptada (2026-10-22) | Deisy |
+| [ADR-0018](adr/ADR-0018-presencia-esp-radar-descartada.md) | Presencia de esp-radar descartada; el visor la muestra como "no disponible" | Aceptada (2026-10-26) | Deisy |
+| [ADR-0019](adr/ADR-0019-detector-presencia-propio.md) | Diseño de un detector propio (WiDetect + respiración + estados) | Propuesta (2026-10-26) | ambos |
+| [ADR-0020](adr/ADR-0020-regla-instalacion-prueba-cobertura.md) | Regla de instalación y prueba de cobertura como dirección | Aceptada (2026-10-26) | Deisy |
+| [ADR-0021](adr/ADR-0021-ftm-distancia-entre-placas.md) | FTM para estimar la distancia entre placas (por evaluar) | Propuesta (2026-10-26) | ambos |
 
 Pendientes de decidir: remoto privado para git; plan Blaze para push; modo CSI 8 vs 12 bits; firmware para placas A y C.
