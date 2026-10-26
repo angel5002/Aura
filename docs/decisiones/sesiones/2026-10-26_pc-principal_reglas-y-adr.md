@@ -25,7 +25,8 @@ Aplicar lo que Deisy aprobó tras la instalación del registro de decisiones.
 
 ## Pendientes y riesgos
 - Copiar al repo los registros de L001 y de la prueba del kit en la laptop (Deisy avisará).
-- D11f: decidir si se le da un criterio de aceptación (propuesta: ≥ 99 % de bytes altos en 0x00–0x0F y
-  `valid` = 52 valores) o se deja como informativa.
-- 0.1.0–0.1.2 no están archivadas; no se pueden etiquetar.
-- "Fase 1" (ADR-0019) no está definida todavía en el repositorio.
+- D11f: resuelto en el cierre (criterio aceptado por Deisy, definido a posteriori; APROBADA con S002).
+- 0.1.0–0.1.2 no se archivaron y se perdieron; no se etiquetan.
+- **ADR-0022** (pendiente, no iniciado): respaldo del repositorio (GitHub privado o `git bundle`), con revisión
+  previa de toda la historia en busca de secretos y datos.
+- **Fase 1 de la ADR-0019** (pendiente, no iniciado): definirla en `docs/plan_presencia.md`.

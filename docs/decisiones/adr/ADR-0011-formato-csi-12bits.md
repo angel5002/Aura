@@ -28,9 +28,10 @@ Mantener el decodificador: el C5 entrega por defecto 53 palabras de 16 bits (val
 - Decodificadores oficiales: esp-radar y `csi_recv_router` de esp-csi (leen palabras de 16 bits con extensión de
   12); `lltf_bit_mode` en `C:\esp\v5.5.6\esp-idf\components\esp_wifi\include\esp_wifi_he_types.h` (línea 63, fuera
   del repositorio).
-- D11f no se cita como verificación: es **informativa, sin criterio de aceptación** en el plan, y figura como
-  "NO EJECUTADA". Se reprodujo el 26/10 con S002 con el mismo valor que el 24/10 (100,00 % de bytes altos en
-  0x00–0x0F; 52 valores = 26 subportadoras).
+- D11f **APROBADA** el 26/10/2026 con `S002_local.csv` (100,00 % de bytes altos en 0x00–0x0F; `valid` = 52 valores
+  = 26 subportadoras), en `docs/resultados_pruebas.md`. Criterio (≥ 99 % y 52 valores) en `docs/plan_pruebas.md`,
+  **definido a posteriori (26/10/2026), tras observar el resultado del 24/10**; el 24/10 figuraba como informativa
+  / NO EJECUTADA con el mismo valor.
 
 ## Cómo revertir
 Cambiar `lltf_bit_mode` y adaptar el decodificador.

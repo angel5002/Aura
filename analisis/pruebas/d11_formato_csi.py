@@ -166,14 +166,16 @@ def main() -> int:
     registrar("D11e orden Re/Im (informativo)", f"rugosidad de amplitud emparejando desde 0: {r0:.3f}, desde 1: {r1:.3f}",
               "no verificable con una sola placa; IDF documenta (Im, Re)", "NO EJECUTADA",
               "el orden Im/Re no se puede distinguir sin referencia externa; la amplitud no depende de el")
-    registrar("D11f ancho de valor y subportadoras (informativo)",
+    ok_f = frac_12 >= 0.99 and V.shape[1] == 52
+    registrar("D11f ancho de valor y subportadoras",
               f"{100 * frac_12:.2f} % de los bytes altos de cada palabra en 0x00-0x0F -> "
               f"{'12 bits en palabras de 16' if frac_12 >= 0.99 else 'NO compatible con 12 bits en 16'}; "
               f"valid = {V.shape[1]} valores = {n_sub} subportadoras complejas (Im, Re)",
-              "informativo: compara con IDF (106 B = 53 subp. en 8 bits) y esp-csi (C5 LLTF 12 bits: 52 valores = 26 subp.)",
-              "NO EJECUTADA", "lltf_bit_mode por defecto = 12 bits (esp_wifi_he_types.h); esp-radar y csi_recv_router "
-              "leen 16 bits con extension de 12")
-    return 0 if (ok_a and ok_b and ok_c and ok_d) else 1
+              ">= 99 % de bytes altos en 0x00-0x0F y valid = 52 valores (criterio definido a posteriori el 26/10/2026, "
+              "tras observar el resultado del 24/10)",
+              "APROBADA" if ok_f else "FALLIDA", "lltf_bit_mode por defecto = 12 bits (esp_wifi_he_types.h); esp-radar y "
+              "csi_recv_router leen 16 bits con extension de 12")
+    return 0 if (ok_a and ok_b and ok_c and ok_d and ok_f) else 1
 
 
 if __name__ == "__main__":
