@@ -2,6 +2,15 @@
 
 Android con Termux. La versión está en el archivo `VERSION`.
 
+## 0.1.7 — 27/10/2026 (antes de K002)
+
+- `scripts/k002.sh` (nuevo, propio del kit): captura de K002 en segundo plano (`receptor_local.py`, salida en
+  `<código>_receptor.log`) y semáforo a pantalla completa con colores ANSI y texto grande (AZUL quieta con cuenta
+  regresiva, AMARILLO 3 s antes con 1 pitido, ROJO 1 s antes de cada horario con 2 pitidos, VERDE al final con 3);
+  cero = primer datagrama de la captura; `termux-wake-lock` y `termux-wake-unlock` siempre (también por error o
+  Ctrl + C, que detiene la captura con su resumen). No instala paquetes.
+- Probado en el bash de Termux del celular con un receptor falso y sustitutos de wake-lock (ver la bitácora).
+
 ## 0.1.6 — 27/10/2026 (después de K000, antes de K001)
 
 - `verificar_captura.py` informa el % de tiempo en MOVIMIENTO (`motion_status` de las muestras; cada muestra rige

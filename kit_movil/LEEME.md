@@ -1,4 +1,4 @@
-# Kit móvil de AURA (Termux en Android) — versión 0.1.6
+# Kit móvil de AURA (Termux en Android) — versión 0.1.7
 
 Recibe la vía local de la placa en el **celular**, sin PC, dentro de la red **AURA-LAB** (router propio, sin
 internet; ver `docs/red_aura.md` y ADR-0023, **Aceptada** el 2026-10-26). Graba el mismo CSV que la laptop (`<código>_local.csv`,
@@ -19,6 +19,7 @@ todavía**: la primera es la prueba del kit (sección 5.a).
 | `docs/ensayos/kit_movil_criterios.md` | copia exacta de `docs/ensayos/kit_movil_criterios.md` (umbrales) |
 | `scripts/capturar.sh` | propio del kit: `termux-wake-lock` + receptor + `termux-wake-unlock` (siempre) |
 | `scripts/exportar.sh` | propio del kit: copia una captura a `Download/aura_export/<código>/` con `SHA256SUMS` (sección 7) |
+| `scripts/k002.sh` | propio del kit: K002 con semáforo en pantalla y captura en segundo plano (`docs/ensayos/k002_cruces.md`) |
 
 En la PC (no va en el kit): `analisis/verificar_export.py` comprueba esos SHA-256 al recibir la carpeta.
 
