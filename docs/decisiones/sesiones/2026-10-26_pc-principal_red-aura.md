@@ -86,8 +86,8 @@ Copias temporales de S002 creadas para estas pruebas: borradas.
 - Deisy dicta la configuración del router (IP, DHCP, canal, modo, seguridad, aislamiento, reservas) para completar
   `docs/red_aura.md`.
 - Prueba con el celular en AURA-LAB (criterio de `docs/guia_salon.md:95`).
-- `kit_captura/scripts/receptor_local.py` y `visor.py` siguen con la versión anterior: actualizarlos implica una
-  versión nueva del kit (ADR-0013, `kit_captura/CAMBIOS.md`). El celular debe copiar `receptor_local.py` desde
-  `analisis/`.
-- Los cambios de `receptor_local.py` y `visor.py` no tienen commit todavía.
+- `kit_captura/scripts/receptor_local.py` y `visor.py` siguen con la versión anterior y **no se actualizan antes del
+  video del 30/10/2026** (decisión de Deisy). Después: **generar ambos kits (`kit_captura/` y `kit_movil/`) desde
+  `analisis/` con un script**, en vez de copias a mano.
+- Criterio agregado antes de la prueba del kit móvil: 0 huecos mayores de 5 s por placa (`docs/guia_salon.md:95-97`).
 - ADR-0022 (respaldo del repositorio) sigue pendiente; esta ADR toma el número 0023.

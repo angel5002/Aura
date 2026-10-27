@@ -101,5 +101,6 @@ Motivo: la recepción por `SUB` no se autentica (`firmware/aura_nodo/main/aura_l
 ## 8. Pendiente
 
 - [ ] Deisy dicta IP del router, rango DHCP, canal, modo, seguridad, WPS, aislamiento e IPs reservadas.
-- [ ] Prueba en la red: anuncio visible, `SUB` con `--ip`, tasa `csi` y pérdida (criterio de `docs/guia_salon.md:95`).
+- [ ] Prueba en la red: anuncio visible, `SUB` con `--ip`, tasa `csi`, pérdida y huecos (criterios de
+      `docs/guia_salon.md:95-97`: `csi ~100/s`, pérdida < 1 % y **0 huecos mayores de 5 s por placa**).
 - [ ] Cargar `wifi1` = AURA-LAB en la NVS de la placa B (fase posterior; en esta fase **no** se cambian credenciales).

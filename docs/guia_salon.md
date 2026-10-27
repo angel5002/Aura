@@ -93,7 +93,9 @@ vez, 0 % de pérdida). Graba mientras muestra.
 1. *Opción 2 (Termux)*: con el celular en el WiFi de casa: instalar Termux desde F-Droid, `pkg install python
    python-numpy`, copiar `receptor_local.py` y `aura_proto.py` (p. ej. a `~/aura/scripts`), crear `~/aura/datos/crudos`
    y correr `python receptor_local.py --id-sesion T1 --duracion 60 --ip 192.168.0.13 --sin-bind`. Éxito: `csi ~100/s`,
-   pérdida < 1 %. Copiar `T1_local.csv` a la PC y reproducirlo con el visor.
+   pérdida < 1 % y **0 huecos mayores de 5 s por placa** (hueco = tiempo entre dos datagramas `A1` consecutivos de
+   una misma placa, medido con `t_pc_unix` en su `<id>_local.csv`, desde el primero hasta el último; agregado el
+   26/10/2026 antes de la prueba, pedido por Deisy). Copiar `T1_local.csv` a la PC y reproducirlo con el visor.
 2. *Opción 1 (USB OTG)*: conectar la placa al celular con OTG, abrir la terminal, elegir el dispositivo (303A).
    Éxito: aparecen líneas `HMS:{...}`. Activar marcas de tiempo y guardar 1 min; convertir con
    `convertir_log_celular.py` y reproducir. Si la app no reconoce la placa o no guarda con hora: descartar la opción.

@@ -82,9 +82,10 @@ La configuración del router se documenta en `docs/red_aura.md`, sin contraseña
 - Observación ajena a esta decisión, corregida el 2026-10-26 (bitácora): `receptor_local.py` solo detectaba el
   reinicio de la placa si la secuencia caía más de 1 000 000; ahora usa una ventana de desorden de 1000 datagramas
   con confirmación sostenida (20 datagramas). Afecta solo al resumen de pérdida, no al CSV ni al visor.
-- Obliga a: completar `docs/red_aura.md` con lo que dicte Deisy; prueba en la red con el celular (criterio de
-  `docs/guia_salon.md:95`: `csi ~100/s`, pérdida < 1 %); en otra fase, cargar wifi1 = AURA-LAB en la NVS (sin
-  grabar firmware).
+- Obliga a: completar `docs/red_aura.md` con lo que dicte Deisy; prueba en la red con el celular (criterios de
+  `docs/guia_salon.md:95-97`: `csi ~100/s`, pérdida < 1 % y **0 huecos mayores de 5 s por placa**, este último
+  agregado por Deisy el 2026-10-26 antes de la prueba; hueco = tiempo entre dos datagramas `A1` consecutivos de una
+  placa según `t_pc_unix`); en otra fase, cargar wifi1 = AURA-LAB en la NVS (sin grabar firmware).
 
 ## Evidencia
 - Código: `firmware/aura_nodo/main/` = `firmware/versiones/0.1.3/main/` (`diff -rq` sin diferencias, 2026-10-26),
