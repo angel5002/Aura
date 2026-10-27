@@ -2,6 +2,27 @@
 
 Android con Termux. La versión está en el archivo `VERSION`.
 
+## 0.1.5 — 27/10/2026 (preparación del celular; antes de K000/K001)
+
+- `scripts/exportar.sh` (nuevo, propio del kit): copia `<código>_local.csv` y su resumen a
+  `Download/aura_export/<código>/`, escribe `SHA256SUMS` de los originales, comprueba la copia, no sobrescribe y dice
+  qué carpeta pasar a la PC por "Transferencia de archivos" (MTP), sin adb ni depuración USB.
+- En la PC (fuera del kit): `analisis/verificar_export.py` comprueba los SHA-256 y, con `--copiar-a-crudos`, copia a
+  `datos/crudos` sin sobrescribir.
+- Probado: `exportar.sh` desde la app con archivos sintéticos (OK; segundo intento rechazado; código inválido
+  rechazado); en la PC, carpeta intacta → OK, archivo alterado → DISTINTO, archivo ausente → FALTA, copia a crudos
+  (a una carpeta de prueba) y segundo intento sin sobrescribir. Todo lo sintético, borrado.
+- `LEEME.md`: sección 7 con el flujo de exportación y la regla de borrar la copia de Download después de pasarla.
+
+## 0.1.4 — 27/10/2026 (preparación del celular; antes de K000/K001)
+
+- `scripts/capturar.sh` (nuevo, propio del kit): `termux-wake-lock` al empezar y `termux-wake-unlock` siempre al
+  terminar (trap EXIT; Ctrl + C → código 130). Probado en el bash de Termux del celular con sustitutos de
+  wake-lock y un receptor falso: fin normal, error y Ctrl + C liberan el bloqueo; sin argumentos muestra el uso.
+- `LEEME.md`: instalación real (Termux 0.118.3 de GitHub; `pkg upgrade` antes de instalar; Python 3.14.8 y numpy
+  2.5.4), copia por adb, captura con `capturar.sh`, pantalla sin "siempre encendida" con cargador.
+- Los demás archivos, sin cambios.
+
 ## 0.1.3 — 26/10/2026 (antes de la prueba del kit)
 
 - Criterios 4 (0 reinicios) y 5 (Termux sin cierres) en `docs/ensayos/kit_movil_criterios.md` y en

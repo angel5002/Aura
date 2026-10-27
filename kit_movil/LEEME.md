@@ -1,11 +1,13 @@
-# Kit móvil de AURA (Termux en Android) — versión 0.1.3
+# Kit móvil de AURA (Termux en Android) — versión 0.1.5
 
 Recibe la vía local de la placa en el **celular**, sin PC, dentro de la red **AURA-LAB** (router propio, sin
 internet; ver `docs/red_aura.md` y ADR-0023, **Aceptada** el 2026-10-26). Graba el mismo CSV que la laptop (`<código>_local.csv`,
 con el CSI crudo), que luego se reproduce en la PC con `visor.py --reproducir`.
 
-**Estado: NO verificado en un celular.** Los tres scripts se probaron en la PC del proyecto (Windows). En Android
-con Termux no se ha ejecutado nada todavía. La primera captura con el celular es la prueba del kit (sección 6).
+**Estado (27/10/2026):** instalado y comprobado en el celular de Deisy (Xiaomi, Android 16): Python 3.14.8, numpy
+2.5.4 (importa también desde la app), `--help` de los scripts, `capturar.sh` (con sustitutos de wake-lock y un
+receptor falso) y `exportar.sh` (desde la app, con un archivo sintético, verificado en la PC). **Ninguna captura real
+todavía**: la primera es la prueba del kit (sección 5.a).
 
 ## 1. Qué lleva y qué NO lleva
 
@@ -15,34 +17,43 @@ con Termux no se ha ejecutado nada todavía. La primera captura con el celular e
 | `scripts/aura_proto.py` | copia exacta de `analisis/aura_proto.py` |
 | `scripts/verificar_captura.py` | copia exacta de `analisis/verificar_captura.py` (revisa los criterios de la prueba) |
 | `docs/ensayos/kit_movil_criterios.md` | copia exacta de `docs/ensayos/kit_movil_criterios.md` (umbrales) |
+| `scripts/capturar.sh` | propio del kit: `termux-wake-lock` + receptor + `termux-wake-unlock` (siempre) |
+| `scripts/exportar.sh` | propio del kit: copia una captura a `Download/aura_export/<código>/` con `SHA256SUMS` (sección 7) |
+
+En la PC (no va en el kit): `analisis/verificar_export.py` comprueba esos SHA-256 al recibir la carpeta.
 
 **No lleva** la clave local (`secretos\clave_local.txt`) ni ningún otro archivo de `secretos\`: la recepción no la usa
 (ADR-0023). No copies `secretos\` al celular. Sin la clave, desde el celular no se mandan comandos `CMD` ni OTA.
 
 Dependencias: Python 3.10 o posterior y numpy. Nada más.
 
-## 2. Instalar Termux (una vez)
+## 2. Instalar Termux (una vez) — como se hizo el 26–27/10/2026
 
-1. Instala **Termux desde F-Droid** (`docs/guia_salon.md`, sección E). La versión de Google Play está desactualizada.
-2. En Termux:
+1. Termux **0.118.3 de GitHub** (`termux/termux-app`, APK `arm64-v8a`), con su SHA-256 comprobado contra el
+   publicado. **No instalar actualizaciones ni complementos de Termux de otra fuente** (F-Droid, Play Store): la
+   versión de GitHub usa otra firma, una llave de prueba pública (README oficial de Termux). Detalle en la bitácora.
+2. Abrir Termux una vez para que instale su base.
+3. Paquetes (se instalaron desde la PC con `adb shell run-as com.termux`; en Termux equivale a):
    ```
-   pkg update
+   pkg upgrade        # PRIMERO actualizar toda la base: sin esto numpy no importa (libc++ vieja)
    pkg install python python-numpy
-   termux-setup-storage
    ```
-   `python-numpy` es el paquete de numpy de Termux según guías comunitarias (**no verificado**). Si no existe,
-   prueba `pip install numpy` y anota lo que pasó. `termux-setup-storage` pide permiso para ver la carpeta
-   Descargas del celular.
+   Resultado: Python 3.14.8 y numpy 2.5.4 (paquete `python-numpy` de Termux, verificado).
+4. Batería de Termux en "Sin restricciones" e inicio automático activado (ajustes del Xiaomi). En este modelo no
+   existe "Desactivar restricciones de procesos secundarios".
 
 ## 3. Copiar el kit al celular
 
-1. Conecta el celular a la PC por USB en modo "Transferencia de archivos" y copia la carpeta `kit_movil` a
-   **Descargas** (Download) del celular.
-2. En Termux:
-   ```
-   cp -r ~/storage/downloads/kit_movil ~/kit_movil
-   ```
-   Las capturas quedan en `~/kit_movil/datos/crudos/` (la carpeta se crea sola).
+Se hizo desde la PC con adb, sin dar a Termux acceso al almacenamiento:
+
+```
+adb push <archivos de kit_movil> /sdcard/Download/aura_kit/          (copia de consulta)
+tar -c --exclude=__pycache__ --exclude=datos kit_movil | adb shell -T "run-as com.termux .../usr/bin/tar -x -C /data/data/com.termux/files/home"
+```
+
+(`adb exec-in` no sirve para esto: falló sin dar error.) El kit queda en `~/kit_movil` y las capturas en
+`~/kit_movil/datos/crudos/` (la carpeta se crea sola). Las capturas **no dependen de adb**: salen con `exportar.sh`
+por "Transferencia de archivos" (sección 7), así que la depuración USB se puede apagar al terminar las pruebas.
 
 ## 4. Antes de cada captura
 
@@ -51,23 +62,26 @@ Dependencias: Python 3.10 o posterior y numpy. Nada más.
   entre sesiones (`docs/red_aura.md`, sección 3).
 - El celular está conectado a **AURA-LAB**. Si Android avisa que la red no tiene internet, elige **mantener la
   conexión**. No hace falta apagar los datos móviles (inferido, no verificado).
-- Excluye Termux de la optimización de batería (Ajustes de Android > Apps > Termux > Batería > Sin restricciones).
+- Termux fuera de la optimización de batería ("Sin restricciones") e inicio automático: ya configurado (sección 2).
+- La pantalla **no** se queda encendida con cargador ni power bank (`stay_on_while_plugged_in` = 2, solo USB, se
+  dejó así a propósito). Por eso `capturar.sh` toma `termux-wake-lock`. Si aun así el celular corta los datos con la
+  pantalla apagada, lo detectará el criterio de huecos.
 - No compartas la clave WiFi de AURA-LAB con alumnos ni con el público (`docs/red_aura.md`, sección 7).
 
 ## 5. Capturar
 
 ```
-termux-wake-lock
-cd ~/kit_movil/scripts
-python receptor_local.py --id-sesion K001 --duracion 1800 --ip <IP_DE_LA_PLACA> --sin-bind
+bash ~/kit_movil/scripts/capturar.sh K001 <IP_DE_LA_PLACA> 1800
 ```
 
-- `--id-sesion`: un **código**, nunca el nombre de una persona (regla 9 de `CLAUDE.md`). `K001` es solo un ejemplo.
-- `--duracion` en segundos. Para terminar antes: **Ctrl + C** (tecla CTRL de la barra de Termux y luego `c`); el
-  resumen se guarda igual.
-- Usa siempre `--ip`: con la pantalla apagada Android puede no entregar los anuncios por broadcast (inferido).
+- `capturar.sh` toma `termux-wake-lock` al empezar y hace `termux-wake-unlock` **siempre** al terminar: por duración,
+  por error o por Ctrl + C. Si Android cierra Termux a la fuerza no llega a liberarlo, pero el bloqueo muere con
+  Termux. Llama a `receptor_local.py --id-sesion <código> --duracion <s> --ip <IP> --sin-bind`.
+- El código: un **código**, nunca el nombre de una persona (regla 9 de `CLAUDE.md`). `K001` es solo un ejemplo.
+- Duración en segundos (1800 por defecto). Para terminar antes: **Ctrl + C** (tecla CTRL de la barra de Termux y
+  luego `c`); el resumen se guarda igual (`"fin": "usuario"`) y el script sale con código 130.
+- Se usa siempre `--ip`: con la pantalla apagada Android puede no entregar los anuncios por broadcast (inferido).
 - Cada 5 s se imprime la tasa por tipo y la pérdida. Si no aparece nada en 15 s, revisa la red y la IP.
-- Al terminar: `termux-wake-unlock`.
 - **Reiniciar la placa en el lugar = desenchufarla** y volver a enchufarla (`AURA REBOOT` solo funciona por USB desde
   la PC). Tras un reinicio, el receptor sigue grabando solo; no hace falta reiniciarlo.
 - Si la placa cae al hotspot (wifi2), cambia de IP y el receptor deja de recibir: detenlo y vuelve a lanzarlo con la
@@ -79,11 +93,11 @@ Un **solo bloque de 30 min**, con el **celular como único receptor**, la **sala
 (placa y router en su sitio; nadie se mueve en la zona). Sin laptop.
 
 1. Lee la IP de la placa en el panel del router.
-2. `termux-wake-lock`, y en `~/kit_movil/scripts`:
+2. En Termux:
    ```
-   python receptor_local.py --id-sesion K001 --duracion 1800 --ip <IP_DE_LA_PLACA> --sin-bind
+   bash ~/kit_movil/scripts/capturar.sh K001 <IP_DE_LA_PLACA> 1800
    ```
-   Deja que termine solo (no uses Ctrl + C) y no cierres Termux.
+   Deja que termine solo (no uses Ctrl + C) y no cierres Termux. Puedes apagar la pantalla.
 3. Revisa con `verificar_captura.py` (sección 6) y lleva los datos a la PC (sección 7).
 
 Criterios (fijados antes de la prueba): pérdida **< 1 %**, **0 huecos mayores de 5 s**, mediana de CSI/s en
@@ -139,20 +153,36 @@ Hora de la placa: tras un reinicio por software la placa conserva la hora anteri
 
 Un criterio no cumplido se registra como **FALLIDO**; el criterio no se cambia después de ver el resultado.
 
-## 7. Llevar los datos a la PC
+## 7. Llevar los datos a la PC (sin adb ni depuración USB)
 
-```
-cp ~/kit_movil/datos/crudos/K001_local* ~/storage/downloads/
-```
+Requisito (una vez, ya hecho el 27/10/2026): `termux-setup-storage` en la app Termux, aceptando el permiso de archivos.
 
-Copia los archivos por USB a `C:\aura\datos\crudos\` (fuera de git). En la PC:
+1. En Termux:
+   ```
+   bash ~/kit_movil/scripts/exportar.sh K001
+   ```
+   Copia `K001_local.csv` y `K001_local_resumen.json` a **`Download/aura_export/K001/`**, escribe `SHA256SUMS` (SHA-256
+   de los originales) y comprueba la copia. No sobrescribe una exportación anterior.
+2. Conecta el celular a la PC por USB en modo **"Transferencia de archivos"** (MTP; no hace falta depuración USB) y
+   copia la carpeta `Download/aura_export/K001` **completa** a la PC (p. ej. al Escritorio).
+3. En la PC, verifícala y pásala a los datos crudos (no sobrescribe nada):
+   ```
+   C:\aura\analisis\.venv\Scripts\python.exe C:\aura\analisis\verificar_export.py <carpeta copiada>\K001 --copiar-a-crudos
+   ```
+   Si dice FALLIDO (archivo DISTINTO o FALTA), vuelve a copiar la carpeta desde el celular.
+4. **Regla (datos de personas): después de pasarla y verificarla, BORRA la copia de Download**
+   (`Download/aura_export/K001`, desde el administrador de archivos del celular o con
+   `rm -r ~/storage/downloads/aura_export/K001` en Termux) **y la carpeta copiada al Escritorio de la PC**. El
+   original queda en `~/kit_movil/datos/crudos/` hasta que se decida borrarlo.
+5. Reproducir en la PC:
+   ```
+   C:\aura\analisis\.venv\Scripts\python.exe C:\aura\analisis\visor.py --reproducir C:\aura\datos\crudos\K001_local.csv
+   ```
 
-```
-C:\aura\analisis\.venv\Scripts\python.exe C:\aura\analisis\visor.py --reproducir C:\aura\datos\crudos\K001_local.csv
-```
+El visor usa la hora del celular (`t_pc_unix`) como referencia; sin internet la placa no tiene hora SNTP.
 
-El visor usa la hora del celular (`t_pc_unix`) como referencia; sin internet la placa no tiene hora SNTP (`t_us` = 0).
-Son datos de personas: cuando la copia en la PC esté comprobada, bórralos del celular (Descargas y `~/kit_movil/datos`).
+`exportar.sh` debe ejecutarse **en la app Termux**: desde la PC con `adb shell run-as` no se ve Download (ese proceso
+no recibe el permiso de archivos de la app; comprobado el 27/10/2026).
 
 ## 8. Límites conocidos
 

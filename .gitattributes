@@ -1,0 +1,2 @@
+# Scripts de shell para Termux/Android: siempre LF (con CRLF bash falla en el celular).
+*.sh text eol=lf
