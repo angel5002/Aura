@@ -8,6 +8,8 @@
   el primer positivo de cada cruce (criterio de K002). La plantilla analisis/escena_k002/index.html se copia al lado.
 - La salida queda en datos/procesados (fuera de git): son datos de una prueba con una persona.
 - POST /guardar?nombre=<archivo>.png guarda la imagen (PNG en base64) en datos/procesados/video_K002/capturas/.
+- Video: la pagina (?video=<nombre>.mp4) envia cada cuadro a POST /video/cuadro; el servidor los pasa a ffmpeg por
+  tuberia (H.264, 1920x1080, 30 fps) y al terminar escribe <nombre>.json con el resultado, junto al MP4.
 - La figura usa el modelo "Animated Human" de Quaternius (CC0, poly.pizza/m/c3Ibh9I3udk), descargado con
   autorizacion de Deisy en escena/modelos/ (fuera de git). 'preparar' comprueba su SHA-256.
 """
@@ -19,6 +21,9 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
+import threading
+import time
 import sys
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +38,9 @@ PLANTILLA = Path(__file__).resolve().parent / "escena_k002" / "index.html"
 DESTINO = RAIZ / "datos" / "procesados" / "video_K002" / "escena"
 CAPTURAS = RAIZ / "datos" / "procesados" / "video_K002" / "capturas"
 MODELO = DESTINO / "modelos" / "quaternius_animated_human.glb"
+VIDEOS = RAIZ / "datos" / "procesados" / "video_K002"
+FFMPEG = Path.home() / "AppData" / "Local" / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe"
+FPS = 30
 MODELO_SHA256 = "ce4d543e82e455d5a1253798c9759f12b9eec74929ddbca464447eeaa3a42c5d"
 CRUCES = [30 + 25 * k for k in range(10)]
 ANTES_S, DESPUES_S = 3.0, 8.0
@@ -81,9 +89,27 @@ def preparar() -> int:
     return 0
 
 
+class Video:
+    """Un solo video a la vez: ffmpeg recibe los PNG por la entrada estandar, en el orden en que llegan."""
+    candado = threading.Lock()
+    proc = None
+    ruta = None
+    esperados = 0
+    recibidos = 0
+    inicio = 0.0
+
+
+def responder(h, codigo: int, texto: str = "ok"):
+    h.send_response(codigo)
+    h.end_headers()
+    h.wfile.write(texto.encode("utf-8"))
+
+
 class Manejador(SimpleHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
+        if u.path.startswith("/video/"):
+            return self.video(u)
         nombre = parse_qs(u.query).get("nombre", [""])[0]
         if u.path != "/guardar" or not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}\.png", nombre):
             self.send_error(400, "ruta o nombre no validos")
@@ -98,6 +124,51 @@ class Manejador(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"ok")
+
+    def video(self, u):
+        largo = int(self.headers.get("Content-Length", 0))
+        cuerpo = self.rfile.read(largo) if largo else b""
+        with Video.candado:
+            if u.path == "/video/inicio":
+                q = parse_qs(u.query)
+                nombre = q.get("nombre", [""])[0]
+                if Video.proc is not None or not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}\.mp4", nombre):
+                    return responder(self, 400, "video en curso o nombre no valido")
+                Video.ruta = VIDEOS / nombre
+                Video.esperados, Video.recibidos, Video.inicio = int(q.get("cuadros", ["0"])[0]), 0, time.time()
+                Video.ruta.with_suffix(".json").unlink(missing_ok=True)
+                registro = open(Video.ruta.with_suffix(".ffmpeg.log"), "w", encoding="utf-8")
+                Video.proc = subprocess.Popen(
+                    [str(FFMPEG), "-y", "-f", "image2pipe", "-framerate", str(FPS), "-c:v", "png", "-i", "-",
+                     "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+                     "-movflags", "+faststart", str(Video.ruta)],
+                    stdin=subprocess.PIPE, stdout=registro, stderr=registro)
+                print(f"video: inicio {Video.ruta.name} ({Video.esperados} cuadros)", flush=True)
+                return responder(self, 200)
+            if Video.proc is None:
+                return responder(self, 409, "no hay video en curso")
+            if u.path == "/video/cuadro":
+                texto = cuerpo.decode("ascii")
+                if not texto.startswith("data:image/png;base64,"):
+                    return responder(self, 400, "se espera un PNG en base64")
+                try:
+                    Video.proc.stdin.write(base64.b64decode(texto.split(",", 1)[1]))
+                except OSError as e:
+                    return responder(self, 500, f"ffmpeg no acepta el cuadro: {e}")
+                Video.recibidos += 1
+                if Video.recibidos % 150 == 0:
+                    print(f"video: {Video.recibidos}/{Video.esperados} cuadros", flush=True)
+                return responder(self, 200)
+            if u.path == "/video/fin":
+                Video.proc.stdin.close()
+                rc = Video.proc.wait()
+                res = {"mp4": str(Video.ruta), "returncode": rc, "cuadros_recibidos": Video.recibidos,
+                       "cuadros_esperados": Video.esperados, "segundos_de_render": round(time.time() - Video.inicio, 1)}
+                Video.ruta.with_suffix(".json").write_text(json.dumps(res, indent=2), encoding="utf-8")
+                print(f"video: fin {res}", flush=True)
+                Video.proc = None
+                return responder(self, 200 if rc == 0 else 500, json.dumps(res))
+            return responder(self, 404, "ruta no valida")
 
     def log_message(self, fmt, *args):
         pass

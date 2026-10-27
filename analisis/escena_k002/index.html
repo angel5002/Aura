@@ -37,7 +37,7 @@ const T_FIJO = P.has("t") ? parseFloat(P.get("t")) : null;
 const CAMARA = P.get("cam") || "principal";
 const AZ = P.has("az") ? parseFloat(P.get("az")) : null;  // azimut de la órbita en grados (el video lo pasa por cuadro)
 const EXPORTAR = P.get("exportar");                 // nombre del PNG a guardar (servidor local)
-const VELOCIDAD = parseFloat(P.get("vel") || "1");  // solo informativo en el HUD
+let VELOCIDAD = parseFloat(P.get("vel") || "1");    // solo informativo en el HUD (el video lo fija por cuadro)
 const ROTULO = "Señal y detección: datos reales de K002. La figura sigue el protocolo de la prueba; " +
                "AURA no capta la forma ni la postura del cuerpo.";
 
@@ -57,22 +57,27 @@ function detectados(t) { return D.primer_positivo.filter(p => p !== null && p <=
 
 // ---------- protocolo (figura) ----------
 const PUNTO1_Z = 0.80, VUELTA_Z = -0.20, PASO_X = 0.0;          // marcas frente a la mitad de la línea
-const SALIDA = -0.5, LLEGADA = 1.0, REGRESO = 2.5;               // s respecto del horario (~3 s ida y vuelta)
-const GIRO = 0.4;                                                // s para darse la vuelta al inicio de cada tramo
+const SALIDA = -0.5, LLEGADA = 0.9, GIRO_FIN = 1.3, REGRESO = 2.5;  // s respecto del horario (~3 s ida y vuelta)
+const GIRO = 0.4;                                                // s para volver a mirar la línea en el Punto 1
+const PESO_MAX = 0.85;                                           // la caminata se mezcla un poco con Idle (braceo suave)
+const rampa = (x) => Math.max(0, Math.min(1, x));
 function persona(t) {
-  // rumbo: 0 = mira hacia la cámara (+z); PI = mira hacia la línea (-z)
+  // rumbo: 0 = mira hacia la cámara (+z); PI = mira hacia la línea (-z). w = peso de la animación Walk
   for (const tc of D.cruces) {
     const s = t - tc;
-    if (s >= SALIDA && s < LLEGADA)
-      return { z: PUNTO1_Z + (s - SALIDA) / (LLEGADA - SALIDA) * (VUELTA_Z - PUNTO1_Z), camina: s - SALIDA, rumbo: Math.PI };
-    if (s >= LLEGADA && s < REGRESO) {
-      const g = Math.min(1, (s - LLEGADA) / GIRO);
-      return { z: VUELTA_Z + (s - LLEGADA) / (REGRESO - LLEGADA) * (PUNTO1_Z - VUELTA_Z), camina: s - SALIDA, rumbo: Math.PI * (1 - g) };
-    }
-    if (s >= REGRESO && s < REGRESO + GIRO)                      // ya en el Punto 1: vuelve a mirar la línea
-      return { z: PUNTO1_Z, camina: null, rumbo: Math.PI * (s - REGRESO) / GIRO, mezcla: 1 - (s - REGRESO) / GIRO };
+    if (s >= SALIDA && s < LLEGADA)                              // ida hasta la marca de vuelta
+      return { z: PUNTO1_Z + (s - SALIDA) / (LLEGADA - SALIDA) * (VUELTA_Z - PUNTO1_Z), camina: s - SALIDA, rumbo: Math.PI,
+               w: PESO_MAX * rampa(Math.min((s - SALIDA) / 0.25, (LLEGADA - s) / 0.2 + 0.3)) };
+    if (s >= LLEGADA && s < GIRO_FIN)                            // se da la vuelta en el sitio
+      return { z: VUELTA_Z, camina: s - SALIDA, rumbo: Math.PI * (1 - (s - LLEGADA) / (GIRO_FIN - LLEGADA)),
+               w: 0.3 * rampa(1 - (s - LLEGADA) / 0.15) };
+    if (s >= GIRO_FIN && s < REGRESO)                            // vuelta al Punto 1
+      return { z: VUELTA_Z + (s - GIRO_FIN) / (REGRESO - GIRO_FIN) * (PUNTO1_Z - VUELTA_Z), camina: s - SALIDA, rumbo: 0,
+               w: PESO_MAX * rampa(Math.min((s - GIRO_FIN) / 0.2 + 0.3, (REGRESO - s) / 0.2 + 0.3)) };
+    if (s >= REGRESO && s < REGRESO + GIRO)                      // en el Punto 1: vuelve a mirar la línea
+      return { z: PUNTO1_Z, camina: null, rumbo: Math.PI * (s - REGRESO) / GIRO, w: 0 };
   }
-  return { z: PUNTO1_Z, camina: null, rumbo: Math.PI };
+  return { z: PUNTO1_Z, camina: null, rumbo: Math.PI, w: 0 };
 }
 
 // ---------- escena ----------
@@ -158,12 +163,14 @@ for (let i = 0; i < 3; i++) {
 // los pies, para que la figura no aclare las baldosas (regla: nada se ilumina bajo la persona).
 const matHolo = new THREE.ShaderMaterial({
   skinning: true, transparent: true, depthWrite: false, side: THREE.FrontSide,
-  uniforms: { color: { value: new THREE.Color(0x3dffc0) }, opacidad: { value: 0.9 } },
+  uniforms: { color: { value: new THREE.Color(0x3dffc0) }, opacidad: { value: 0.6 } },
   vertexShader: `
     #include <common>
     #include <skinning_pars_vertex>
-    varying vec3 vN; varying vec3 vV; varying float vY;
+    attribute float aCabeza;                               // 1 = vértice de la cabeza del modelo (ojos, pelo): se oculta
+    varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
     void main() {
+      vCab = aCabeza;
       #include <skinbase_vertex>
       #include <beginnormal_vertex>
       #include <skinnormal_vertex>
@@ -176,18 +183,63 @@ const matHolo = new THREE.ShaderMaterial({
     }`,
   fragmentShader: `
     uniform vec3 color; uniform float opacidad;
-    varying vec3 vN; varying vec3 vV; varying float vY;
+    varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
     void main() {
-      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.0);
-      float pies = smoothstep(0.02, 0.5, vY);              // apaga el brillo cerca del piso
-      vec3 c = color * (0.25 + 1.5 * f) * (0.35 + 0.65 * pies);
-      gl_FragColor = vec4(c, opacidad * (0.12 + 0.75 * f) * (0.5 + 0.5 * pies));
+      if (vCab > 0.5) discard;
+      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.4);
+      float pies = smoothstep(0.02, 0.3, vY);              // apaga el brillo cerca del piso
+      vec3 c = color * (0.22 + 1.4 * f) * (0.35 + 0.65 * pies);
+      gl_FragColor = vec4(c, opacidad * (0.05 + 0.7 * f) * (0.4 + 0.6 * pies));
     }`,
 });
 const figura = new THREE.Group();
 escena.add(figura);
 let mezclador = null, accCaminar = null, accQuieto = null;
 const RITMO = 1.25;                                    // velocidad de la caminata (pasos acordes a ~0,7 m/s)
+
+// Halo suave alrededor de la figura y estela tenue al caminar (sprites; mezcla normal; se desvanecen antes del piso)
+function texturaHalo() {
+  const cv = document.createElement("canvas"); cv.width = 64; cv.height = 128;
+  const x = cv.getContext("2d"); x.translate(32, 64); x.scale(1, 2);
+  const g = x.createRadialGradient(0, 0, 0, 0, 0, 32);
+  g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.5, "rgba(255,255,255,0.3)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.fillRect(-32, -32, 64, 64);
+  return new THREE.CanvasTexture(cv);
+}
+const texHalo = texturaHalo();
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: 0x2fffc8, transparent: true, opacity: 0.16, depthWrite: false }));
+halo.scale.set(1.0, 1.9, 1); halo.position.y = 1.1;
+const estela = [];
+for (let k = 1; k <= 5; k++) {
+  const e = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: 0x2fffc8, transparent: true, opacity: 0, depthWrite: false }));
+  e.scale.set(0.6, 1.7, 1); e.position.y = 1.0; escena.add(e); estela.push(e);
+}
+// Círculo suave en el piso bajo los pies (marca de posición de la figura ilustrativa; no es detección)
+function texturaCirculo() {
+  const cv = document.createElement("canvas"); cv.width = cv.height = 128;
+  const x = cv.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, "rgba(3,8,12,0.75)"); g.addColorStop(0.72, "rgba(3,8,12,0.55)");
+  g.addColorStop(0.86, "rgba(140,255,220,0.2)"); g.addColorStop(1, "rgba(140,255,220,0)");
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+const circuloPies = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.7),
+  new THREE.MeshBasicMaterial({ map: texturaCirculo(), transparent: true, depthWrite: false }));
+circuloPies.rotation.x = -Math.PI / 2; circuloPies.position.y = 0.009; circuloPies.renderOrder = 1;
+// Marcas del protocolo en el suelo: Punto 1 (0,80 m) y marca de vuelta (0,20 m del otro lado)
+const matMarca = new THREE.MeshBasicMaterial({ color: 0xaab6cc, transparent: true, opacity: 0.5, depthWrite: false });
+const marcaP1 = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.195, 40), matMarca);
+marcaP1.rotation.x = -Math.PI / 2; marcaP1.position.set(PASO_X, 0.008, PUNTO1_Z); escena.add(marcaP1);
+for (const [ancho, largo] of [[0.5, 0.025], [0.025, 0.5]]) {
+  const cruz = new THREE.Mesh(new THREE.PlaneGeometry(ancho, largo), matMarca);
+  cruz.rotation.x = -Math.PI / 2; cruz.position.set(PASO_X, 0.008, PUNTO1_Z); escena.add(cruz);
+}
+const marcaVuelta = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.03), matMarca);
+marcaVuelta.rotation.x = -Math.PI / 2; marcaVuelta.position.set(PASO_X, 0.008, VUELTA_Z); escena.add(marcaVuelta);
+for (const dx of [-0.3, 0.3]) {
+  const tope = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.14), matMarca);
+  tope.rotation.x = -Math.PI / 2; tope.position.set(PASO_X + dx, 0.008, VUELTA_Z); escena.add(tope);
+}
 
 // Partículas suaves alrededor de la figura (se mueven con ella; quedan por encima de 0,35 m)
 function texturaPunto() {
@@ -204,7 +256,7 @@ let sem = 7; const azar = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
 for (let i = 0; i < NP; i++) semillas.push({ a: azar() * Math.PI * 2, r: 0.22 + azar() * 0.3, y: azar(), v: 0.08 + azar() * 0.12, f: azar() });
 const particulas = new THREE.Points(geoPart, new THREE.PointsMaterial({
   color: 0x7dffd8, size: 0.035, map: texturaPunto(), transparent: true, opacity: 0.55, depthWrite: false }));
-figura.add(particulas);
+figura.add(particulas, halo, circuloPies);
 function moverParticulas(t) {
   const pos = geoPart.attributes.position.array;
   semillas.forEach((s, i) => {
@@ -224,6 +276,28 @@ const cargaFigura = new Promise((ok, mal) => {
     modelo.scale.multiplyScalar(1.70 / tam.y);                     // 1,70 m de alto (ilustrativo)
     modelo.position.y = -caja.min.y * 1.70 / tam.y;
     figura.add(modelo);
+    modelo.updateMatrixWorld(true);
+    let malla = null; modelo.traverse(o => { if (o.isSkinnedMesh) malla = o; });
+    const huesos = malla.skeleton.bones, cabeza = huesos.find(b => b.name === "Head");
+    const deCabeza = new Set(); cabeza.traverse(b => deCabeza.add(huesos.indexOf(b)));
+    const geo = malla.geometry, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+    const aCab = new Float32Array(si.count), caja3 = new THREE.Box3(), v = new THREE.Vector3();
+    for (let i = 0; i < si.count; i++) {
+      let p = 0;
+      for (const c of ["getX", "getY", "getZ", "getW"]) if (deCabeza.has(si[c](i))) p += sw[c](i);   // r128: sin getComponent
+      aCab[i] = p;
+      if (p > 0.5) { v.fromBufferAttribute(geo.attributes.position, i); malla.boneTransform(i, v); caja3.expandByPoint(v.applyMatrix4(malla.matrixWorld)); }
+    }
+    geo.setAttribute("aCabeza", new THREE.BufferAttribute(aCab, 1));
+    const centro = caja3.getCenter(new THREE.Vector3()), tamCab = caja3.getSize(new THREE.Vector3());
+    const escCab = cabeza.getWorldScale(new THREE.Vector3()).x;
+    const matCab = matHolo.clone(); matCab.skinning = false; matCab.uniforms = matHolo.uniforms;
+    const bola = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 24), matCab);
+    const d = Math.min(tamCab.x, tamCab.z) * 0.95;               // diámetro sin el volumen del pelo
+    bola.scale.set(d / escCab, d * 1.18 / escCab, d / escCab);
+    bola.position.copy(cabeza.worldToLocal(centro.clone().add(new THREE.Vector3(0, -0.02, 0))));
+    cabeza.add(bola);
+    window.__cabeza = { centro: centro.toArray(), tam: tamCab.toArray(), d };
     mezclador = new THREE.AnimationMixer(modelo);
     const clip = nombre => g.animations.find(a => a.name.endsWith("|" + nombre));
     accCaminar = mezclador.clipAction(clip("Walk")); accQuieto = mezclador.clipAction(clip("Idle"));
@@ -315,6 +389,17 @@ function dibujarHUD(t) {
   }
   const cel = pantalla(CELULAR);
   ocupados.push({ x0: cel.x - 16, x1: cel.x + 16, y0: cel.y - 12, y1: cel.y + 12 });
+  // Marcas del protocolo: nombre a un costado de cada marca (derecha o izquierda), sin tapar la figura
+  for (const [z, nom] of [[PUNTO1_Z, "Punto 1 (0,80 m)"], [VUELTA_Z, "marca de vuelta (0,20 m)"]]) {
+    for (const [dx, a] of [[0.42, "left"], [-0.42, "right"], [0.75, "left"], [-0.75, "right"]]) {
+      const q = pantalla(new THREE.Vector3(PASO_X + dx, 0, z)), r = caja(nom, q.x, q.y + 6, 16, 500, a);
+      const sobreFig = r.x0 < fig.x1 && r.x1 > fig.x0 && r.y0 < fig.y1 && r.y1 > fig.y0;
+      if (choca(r) || sobreFig) continue;
+      c.font = "500 16px 'Segoe UI', sans-serif"; c.textAlign = a; c.lineWidth = 4; c.strokeStyle = "rgba(4,6,11,0.85)";
+      c.strokeText(nom, q.x, q.y + 6); c.textAlign = "left";
+      texto(nom, q.x, q.y + 6, 16, "#c3cde0", 500, a); ocupados.push(r); break;
+    }
+  }
   // Celular primero: rótulo con línea guía en el primer lugar libre; ni el rótulo ni la guía tocan la figura
   const cajaFig = { x0: fig.x0, x1: fig.x1, y0: fig.y0, y1: fig.y1 };
   ocupados.push(cajaFig);
@@ -425,13 +510,17 @@ function actualizar(t, azGrados) {
   figura.position.set(PASO_X, 0, p.z);
   figura.rotation.y = p.rumbo;
   if (mezclador) {
-    const wC = p.camina !== null ? Math.min(1, p.camina / 0.25, (REGRESO - SALIDA - p.camina) / 0.25 + 0.3) : 0;
     accCaminar.time = p.camina !== null ? (p.camina * RITMO) % accCaminar.getClip().duration : 0;
     accQuieto.time = (t * 0.8) % accQuieto.getClip().duration;
-    accCaminar.setEffectiveWeight(Math.max(0, wC)); accQuieto.setEffectiveWeight(1 - Math.max(0, wC));
+    accCaminar.setEffectiveWeight(p.w); accQuieto.setEffectiveWeight(1 - p.w);
     mezclador.update(0);
   }
   moverParticulas(t);
+  // Estela: posiciones del protocolo un instante antes; solo se ve mientras la figura se desplaza
+  estela.forEach((e, k) => {
+    const q = persona(t - (k + 1) * 0.07), dz = Math.abs(q.z - p.z);
+    e.position.set(PASO_X, 1.0, q.z); e.material.opacity = dz > 0.015 ? 0.07 * (1 - k / 5) : 0;
+  });
   // Foco en la figura y la línea
   const foco = new THREE.Vector3(0, 0.8, p.z * 0.5);
   bokeh.uniforms.focus.value = camara.position.distanceTo(foco);
@@ -445,6 +534,36 @@ function compuesto() {
   return o.toDataURL("image/png");
 }
 window.listo = cargaFigura;
+// Línea de tiempo del video (igual que analisis/video_k002.py): cada cruce a ×1 de t_k − 1,5 a t_k + 3 s; el resto a ×20
+function lineaDeTiempo() {
+  const FPS = 30, ANTES = 1.5, DESPUES = 3.0, ACEL = 20, FIN = 300, tramos = [];
+  let t = 0;
+  for (const tc of D.cruces) { tramos.push([t, tc - ANTES, ACEL]); tramos.push([tc - ANTES, tc + DESPUES, 1]); t = tc + DESPUES; }
+  tramos.push([t, FIN, ACEL]);
+  const cuadros = [];
+  for (const [a, b, v] of tramos) { const n = Math.round((b - a) / v * FPS); for (let i = 0; i < n; i++) cuadros.push([a + i * v / FPS, v]); }
+  return cuadros;
+}
+window.lineaDeTiempo = lineaDeTiempo;
+window.grabarVideo = async function (nombre) {
+  await cargaFigura;
+  const cuadros = lineaDeTiempo();
+  if (!(await fetch("/video/inicio?nombre=" + encodeURIComponent(nombre) + "&cuadros=" + cuadros.length, { method: "POST" })).ok) {
+    document.title = "video error inicio"; return false;
+  }
+  window.__celPrev = null;
+  for (let i = 0; i < cuadros.length; i++) {
+    const [t, v] = cuadros[i];
+    VELOCIDAD = v;
+    actualizar(t, vista.az + 12 * Math.sin(2 * Math.PI * i / cuadros.length));   // órbita lenta de ±12°
+    const r = await fetch("/video/cuadro", { method: "POST", body: compuesto() });
+    if (!r.ok) { document.title = "video error cuadro " + i; return false; }
+    document.title = `video ${i + 1}/${cuadros.length}`;
+  }
+  const r = await fetch("/video/fin", { method: "POST" });
+  document.title = r.ok ? "video listo" : "video error fin";
+  return r.ok;
+};
 window.renderizar = function (t, az) { actualizar(t, az); return true; };
 window.guardar = async function (t, nombre, az) {
   await cargaFigura;
@@ -454,7 +573,9 @@ window.guardar = async function (t, nombre, az) {
 };
 
 cargaFigura.catch(e => { document.title = "error modelo"; console.error(e); });
-if (T_FIJO !== null) {
+if (P.has("video")) {
+  window.grabarVideo(P.get("video"));
+} else if (T_FIJO !== null) {
   cargaFigura.then(() => {
     actualizar(T_FIJO);
     if (EXPORTAR) window.guardar(T_FIJO, EXPORTAR).then(ok => { document.title = ok ? "guardado" : "error"; });
