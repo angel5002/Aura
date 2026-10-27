@@ -2,6 +2,14 @@
 
 Android con Termux. La versión está en el archivo `VERSION`.
 
+## 0.1.8 — 27/10/2026 (antes de K002)
+
+- `scripts/k002_completo.sh` (nuevo): K002 con un solo comando: `bell-character = beep` solo si hace falta (sin
+  duplicar) + `termux-reload-settings`; pantalla BLANCA "VE AL PUNTO 1" con cuenta regresiva de 20 s sin capturar
+  (el celular está del otro lado de la línea); `k002.sh K002 192.168.8.103 330`; `exportar.sh K002` solo si
+  `k002.sh` terminó bien.
+- Probado en el bash de Termux con receptor falso y HOME temporales (ver la bitácora).
+
 ## 0.1.7 — 27/10/2026 (antes de K002)
 
 - `scripts/k002.sh` (nuevo, propio del kit): captura de K002 en segundo plano (`receptor_local.py`, salida en

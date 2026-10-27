@@ -22,6 +22,21 @@ Firmware: el que tenga la placa al ejecutarla (hoy 0.1.3, **sin** filtro de dest
 - La pantalla del celular debe seguir encendida toda la prueba: suspensión de pantalla mayor que 330 s (el
   wake-lock solo mantiene la CPU). Pitidos: `bell-character=beep` en `~/.termux/termux.properties`.
 
+## Lanzamiento con un solo comando (`k002_completo.sh`, kit 0.1.8)
+
+El celular está sobre la cama, del otro lado de la línea: no se puede pulsar Enter desde el Punto 1 sin cruzar con
+la captura ya iniciada (decisión de Deisy del 27/10/2026, antes de ejecutar). Por eso se lanza todo con:
+
+```
+bash ~/kit_movil/scripts/k002_completo.sh
+```
+
+que, en este orden: (1) activa `bell-character = beep` en `~/.termux/termux.properties` solo si hace falta (sin
+duplicar la línea) y ejecuta `termux-reload-settings`; (2) muestra a pantalla completa, en **BLANCO**, "VE AL PUNTO 1"
+con una cuenta regresiva de **20 s**, **sin capturar todavía**; (3) lanza `k002.sh K002 192.168.8.103 330` (el cero
+del horario sigue siendo el primer datagrama de la captura); (4) si `k002.sh` terminó bien, ejecuta `exportar.sh
+K002`; si no, muestra el error y **no** exporta. Horario y criterios sin cambios.
+
 ## Semáforo (`k002.sh`)
 
 t = 0 es el `t_pc_unix` del **primer datagrama** de la captura (el mismo cero que usa `k002_cruces.py`; mismo reloj).
@@ -44,7 +59,7 @@ t = 0 es el `t_pc_unix` del **primer datagrama** de la captura (el mismo cero qu
 La captura dura 330 s para tener margen:
 
 ```
-bash ~/kit_movil/scripts/k002.sh K002 <IP_DE_LA_PLACA> 330
+bash ~/kit_movil/scripts/k002_completo.sh          (o, solo la captura: k002.sh K002 <IP_DE_LA_PLACA> 330)
 ```
 
 (`k002.sh` lanza `receptor_local.py` en segundo plano, con su salida en `datos/crudos/K002_receptor.log`, y deja la
