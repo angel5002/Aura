@@ -1,7 +1,7 @@
-# Kit móvil de AURA (Termux en Android) — versión 0.1.0
+# Kit móvil de AURA (Termux en Android) — versión 0.1.1
 
 Recibe la vía local de la placa en el **celular**, sin PC, dentro de la red **AURA-LAB** (router propio, sin
-internet; ver `docs/red_aura.md` y ADR-0023, **Propuesta**). Graba el mismo CSV que la laptop (`<código>_local.csv`,
+internet; ver `docs/red_aura.md` y ADR-0023, **Aceptada** el 2026-10-26). Graba el mismo CSV que la laptop (`<código>_local.csv`,
 con el CSI crudo), que luego se reproduce en la PC con `visor.py --reproducir`.
 
 **Estado: NO verificado en un celular.** Los tres scripts se probaron en la PC del proyecto (Windows). En Android
@@ -73,6 +73,34 @@ python receptor_local.py --id-sesion K001 --duracion 1800 --ip <IP_DE_LA_PLACA> 
 - Si la placa cae al hotspot (wifi2), cambia de IP y el receptor deja de recibir: detenlo y vuelve a lanzarlo con la
   IP nueva.
 
+### 5.b Primera prueba (opcional): recibir a la vez con la laptop
+
+Sirve para **separar el efecto del router del efecto del celular**. La placa acepta hasta 3 receptores a la vez y
+envía cada datagrama, con el mismo número de secuencia, a todos (`firmware/aura_nodo/main/aura_local.c:100-118` y
+`:169`; máximo en `firmware/versiones/0.1.3/sdkconfig.usado:731`; leído en el código, **nunca medido con dos
+receptores a la vez**). Así las dos capturas son comparables datagrama a datagrama.
+
+1. Conecta la laptop a **AURA-LAB** (WiFi).
+2. En la laptop, con el kit de captura (`kit_captura`) o con `analisis/` en la PC principal, usa la misma IP de la
+   placa y un código propio, p. ej.:
+   ```
+   python receptor_local.py --id-sesion K001L --duracion 1800 --ip <IP_DE_LA_PLACA> --sin-bind
+   ```
+   (`--sin-bind` evita la regla de firewall de Windows.) Lanza el celular y la laptop con pocos segundos de
+   diferencia.
+3. Después, en la PC principal, revisa los dos archivos juntos:
+   ```
+   python verificar_captura.py K001_local.csv K001L_local.csv
+   ```
+   - Los dos fallan igual → problema del **router, el canal o la placa**.
+   - Solo falla el celular → problema del **celular** (WiFi del teléfono, Android, Termux).
+   - Solo falla la laptop → problema de la laptop; el celular queda validado.
+
+Límites: con dos receptores la placa envía el doble de datagramas (más tiempo de aire y CPU), lo que podría por sí
+mismo aumentar la pérdida (inferido, no verificado; la telemetría `local_descartes` y `local_errores` lo mostraría).
+El receptor de `kit_captura` es la versión anterior: graba el mismo CSV, pero su resumen de pérdida usa la regla de
+reinicios antigua; usa siempre el resumen de `verificar_captura.py`.
+
 ## 6. Revisar la captura (criterios de la prueba del kit)
 
 ```
@@ -80,7 +108,7 @@ python verificar_captura.py ../datos/crudos/K001_local.csv
 ```
 
 El verificador lee los umbrales de `docs/ensayos/kit_movil_criterios.md` (copia exacta del documento del
-repositorio; es la única fuente). Hoy: pérdida **≤ 2 %**; **0 huecos mayores de 5 s por placa**; mediana de CSI/s
+repositorio; es la única fuente). Hoy: pérdida **< 1 %**; **0 huecos mayores de 5 s por placa**; mediana de CSI/s
 en ventanas de 10 s **≥ 80,32/s** (80 % de S002). También informa los reinicios y, de la telemetría de la placa,
 `motivo_reinicio` y `encendido_s` por arranque (`encendido` = se cortó la alimentación o se desenchufó;
 `brownout` = caída de tensión, p. ej. power bank débil; `panico`/`wdt` = fallo de software).

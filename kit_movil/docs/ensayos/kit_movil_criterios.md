@@ -4,13 +4,13 @@ Fuente **única** de los umbrales: `analisis/verificar_captura.py` (y su copia e
 `criterios` de este archivo; no tiene valores propios. Un cambio de umbral se hace aquí, **antes** de la prueba, con
 commit y una línea en `docs/decisiones/bitacora.md`. Después de la prueba no se cambian (regla 11 de `CLAUDE.md`).
 
-Relacionados: ADR-0023 (Propuesta), `docs/red_aura.md`, `kit_movil/LEEME.md`.
+Relacionados: ADR-0023 (Aceptada, 2026-10-26), `docs/red_aura.md`, `kit_movil/LEEME.md`.
 
 ## Criterios (por placa; un archivo `<código>_local.csv` = una placa)
 
 | # | Criterio | Umbral | Cómo se mide |
 |---|---|---|---|
-| 1 | Pérdida | **≤ 2 %** | número de secuencia, mismo contador que `receptor_local.py` (épocas por reinicio) |
+| 1 | Pérdida | **< 1 %** (estricto) | número de secuencia, mismo contador que `receptor_local.py` (épocas por reinicio) |
 | 2 | Huecos | **0 huecos mayores de 5 s** | tiempo entre dos datagramas `A1` consecutivos según `t_pc_unix`, del primero al último |
 | 3 | Tasa de CSI | **mediana de CSI/s en ventanas de 10 s ≥ 80 % de la de S002** | ventanas de 10 s completas desde el primer datagrama (`t_pc_unix`); la última, incompleta, no cuenta |
 
@@ -21,7 +21,7 @@ caídas de tensión (`brownout`) y fallos de software (`panico`, `wdt*`).
 ## Valores que lee el verificador
 
 ```criterios
-perdida_max_pct = 2.0
+perdida_menor_que_pct = 1.0
 hueco_max_s = 5.0
 ventana_tasa_s = 10.0
 tasa_csi_factor_min = 0.80
@@ -37,6 +37,9 @@ tasa depende de cuánto responde el B315s al ping de la placa (no verificado).
 ## Historial
 
 - 2026-10-26: huecos (0 > 5 s) agregados por Deisy antes de la prueba (commit `266000a`, en `docs/guia_salon.md`).
-- 2026-10-26: **pérdida pasa de < 1 % a ≤ 2 %**, decidido por Deisy antes de la prueba. El valor < 1 % venía de
-  `docs/guia_salon.md` (plan de prueba en casa del 24/10).
+- 2026-10-26: **pérdida pasa de < 1 % a ≤ 2 %**, decidido por Deisy antes de la prueba (commit `57a3349`). El valor
+  < 1 % venía de `docs/guia_salon.md` (plan de prueba en casa del 24/10).
+- 2026-10-26: **pérdida vuelve a < 1 %**, decidido por Deisy antes de la prueba: es el estándar ya usado en el
+  proyecto (D4 y D7a-sim en `docs/plan_pruebas.md`; plan de casa en `docs/guia_salon.md`) y el ≤ 2 % no tenía
+  justificación. La clave pasa a `perdida_menor_que_pct` para que la comparación estricta quede explícita.
 - 2026-10-26: tasa de CSI con umbral numérico (antes "~100/s", sin umbral), decidido por Deisy antes de la prueba.

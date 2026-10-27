@@ -116,7 +116,8 @@ Android. `.gitignore` ahora excluye `kit_captura/datos/` y `kit_movil/datos/`.
 - Mediciones informativas con S002, sin criterio de aceptación.
 
 ## ADR creados o modificados
-- Nuevo: ADR-0023 (Propuesta); ampliada en la segunda parte (consecuencias de seguridad, reinicio y visor).
+- Nuevo: ADR-0023 (Propuesta); ampliada en la segunda parte (consecuencias de seguridad, reinicio y visor);
+  **Aceptada por Deisy el 2026-10-26** (quinta parte).
 
 ## Pendientes y riesgos
 - Deisy dicta la configuración del router (IP, DHCP, canal, modo, seguridad, aislamiento, reservas) para completar

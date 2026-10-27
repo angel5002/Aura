@@ -3,7 +3,7 @@
 Los umbrales NO estan en este script: se leen del bloque ```criterios de docs/ensayos/kit_movil_criterios.md
 (fuente unica; --criterios para otra ruta). Criterios, por placa (un archivo = una placa, porque receptor_local.py
 se suscribe a una sola IP):
-  1. perdida <= perdida_max_pct, por numero de secuencia (mismo contador que receptor_local.py);
+  1. perdida < perdida_menor_que_pct (estricto), por numero de secuencia (mismo contador que receptor_local.py);
   2. 0 huecos mayores de hueco_max_s: tiempo entre dos datagramas A1 consecutivos segun t_pc_unix;
   3. mediana de CSI/s en ventanas completas de ventana_tasa_s >= tasa_csi_factor_min x tasa_csi_ref_s002.
 Informa ademas: t_us = 0 (placa sin SNTP), reinicios (por ts_ms y por secuencia) y, de los mensajes 'telemetria',
@@ -28,7 +28,7 @@ from receptor_local import ContadorSecuencia, ts_muestra
 
 RAIZ = Path(__file__).resolve().parent.parent
 CRITERIOS = RAIZ / "docs" / "ensayos" / "kit_movil_criterios.md"
-CLAVES = ("perdida_max_pct", "hueco_max_s", "ventana_tasa_s", "tasa_csi_factor_min", "tasa_csi_ref_s002")
+CLAVES = ("perdida_menor_que_pct", "hueco_max_s", "ventana_tasa_s", "tasa_csi_factor_min", "tasa_csi_ref_s002")
 
 
 def leer_criterios(ruta: Path) -> dict:
@@ -121,9 +121,9 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
 
     ok = True
     pend = False
-    ok1 = res["perdida_pct"] <= crit["perdida_max_pct"]
+    ok1 = res["perdida_pct"] < crit["perdida_menor_que_pct"]
     print(f"  [{'APROBADO' if ok1 else 'FALLIDO'}] 1. perdida {res['perdida_pct']:.3f} % "
-          f"(criterio <= {crit['perdida_max_pct']:g} %)")
+          f"(criterio < {crit['perdida_menor_que_pct']:g} %)")
     ok2 = not huecos
     print(f"  [{'APROBADO' if ok2 else 'FALLIDO'}] 2. huecos > {crit['hueco_max_s']:g} s: {len(huecos)} (criterio 0)")
     for t0, h in huecos[:10]:

@@ -2,6 +2,16 @@
 
 Android con Termux. La versión está en el archivo `VERSION`.
 
+## 0.1.1 — 26/10/2026 (antes de la primera prueba)
+
+- Pérdida **< 1 %** (estricto) en vez de ≤ 2 %, decidido por Deisy; la clave del documento de criterios pasa a
+  `perdida_menor_que_pct`. Copias nuevas de `verificar_captura.py` (90e84ceb17e44f1f) y
+  `docs/ensayos/kit_movil_criterios.md` (aa3ab78f6540339b); `receptor_local.py` y `aura_proto.py` sin cambios.
+- `LEEME.md`: sección 5.b, recepción simultánea con la laptop en la primera prueba (la placa admite hasta 3
+  receptores; nunca medido con dos a la vez); IP de la placa en el rango DHCP del router; ADR-0023 aceptada.
+- Probado en la PC: el verificador da FALLIDO con exactamente 1,0 % de pérdida (archivo sintético) y APROBADO con
+  S002 (0,010 %). **Sigue sin verificar en un celular.**
+
 ## 0.1.0 — 26/10/2026
 
 - Primera versión (fase 1). Copias sin cambios desde el repositorio (base: commit `57a3349`, más el commit que

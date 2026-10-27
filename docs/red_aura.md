@@ -1,13 +1,13 @@
 # Red AURA-LAB: router propio aislado para capturar sin PC
 
-Decisión asociada: [ADR-0023](decisiones/adr/ADR-0023-red-aura-aislada-router-propio.md) (**Propuesta**).
+Decisión asociada: [ADR-0023](decisiones/adr/ADR-0023-red-aura-aislada-router-propio.md) (**Aceptada**, 2026-10-26).
 Creado el 2026-10-26 en la PC principal. **Este archivo no lleva contraseñas**: la del WiFi vive solo en la NVS de
 la placa (`wifi1_pass`, cargada con `analisis/cargar_credenciales.py`) y en `secretos\` (fuera de git), y la de
 administración del router solo la conoce Deisy.
 
-Estado: configuración final dictada por Deisy el 2026-10-26 (seguridad, aislamiento y DHCP). Los campos que esa
-configuración no incluye quedan como **NO INFORMADO**. Nada de lo de abajo está medido todavía en el router; lo
-marcado como "recomendado" es propuesta de Claude, no verificado.
+Estado: configuración dictada por Deisy el 2026-10-26 (seguridad, aislamiento y DHCP; luego IP, rango DHCP, canal,
+ancho y modo). Lo dictado es la configuración del panel, no una medición; lo marcado como "recomendado" es propuesta
+de Claude, no verificado.
 
 ## 1. Router
 
@@ -15,8 +15,8 @@ marcado como "recomendado" es propuesta de Claude, no verificado.
 |---|---|---|
 | Equipo | Huawei B315s-519 (router 4G LTE) | dictado por Deisy |
 | Internet | **ninguno** (sin SIM ni WAN) | dictado por Deisy |
-| IP del router (puerta de enlace) | **NO INFORMADO** | no verificado |
-| Máscara / rango DHCP | **NO INFORMADO** | no verificado |
+| IP del router (puerta de enlace) | `192.168.8.1` | Deisy, 2026-10-26 |
+| Rango DHCP | `192.168.8.100` a `192.168.8.200` (la placa B recibe una IP de este rango) | Deisy, 2026-10-26 |
 | Reserva DHCP (IP fija por MAC) | **el panel no la permite** | Deisy, 2026-10-26 (ver sección 3) |
 | Usuario/contraseña de administración | no se registra aquí | Deisy |
 
@@ -26,8 +26,9 @@ marcado como "recomendado" es propuesta de Claude, no verificado.
 |---|---|---|
 | SSID | `AURA-LAB` | dictado por Deisy |
 | Banda | 2,4 GHz (sin 5 GHz) | dictado por Deisy |
-| Canal | **NO INFORMADO** (recomendado: fijo, no "automático") | propuesta |
-| Modo | **NO INFORMADO** (recomendado: 802.11b/g/n, ancho 20 MHz) | propuesta |
+| Canal | **1**, fijo; elegido con una app de análisis WiFi en casa. **Volver a medir en cada salón** y cambiarlo si está ocupado | Deisy, 2026-10-26 |
+| Ancho de canal | **20 MHz** | Deisy, 2026-10-26 |
+| Modo | el de fábrica (el panel no deja elegirlo) | Deisy, 2026-10-26 |
 | Seguridad | **WPA2-PSK**; el panel no permite elegir el cifrado (AES/TKIP) | Deisy, 2026-10-26 |
 | Contraseña | no se registra aquí (NVS `wifi1_pass` y `secretos\`) | — |
 | WPS | **desactivado** (por confirmar en el router) | Deisy, sección 7 |
@@ -111,7 +112,9 @@ Motivo: la recepción por `SUB` no se autentica (`firmware/aura_nodo/main/aura_l
 ## 8. Pendiente
 
 - [x] Configuración final dictada (2026-10-26): WPA2-PSK, sin reserva DHCP, aislamiento no visible.
-- [ ] (Opcional) Anotar IP del router, canal y modo si se leen en el panel; no se necesitan para la vía local.
+- [x] IP del router, rango DHCP, canal, ancho y modo dictados (2026-10-26).
+- [ ] En cada salón: medir la ocupación de canales con la app y, si el canal 1 está ocupado, cambiarlo y anotarlo
+      en la bitácora (un cambio de canal hace reconectar a la placa, sección 4.f).
 - [ ] Prueba en la red: IP de B leída en el panel; `SUB` con `--ip`; **que lleguen datos comprueba que no hay
       aislamiento de clientes**; criterios en `docs/ensayos/kit_movil_criterios.md` (pérdida, huecos y tasa de CSI),
       revisados con `verificar_captura.py`.

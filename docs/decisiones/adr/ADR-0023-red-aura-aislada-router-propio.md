@@ -1,8 +1,8 @@
 # ADR-0023: Red AURA aislada con router propio y receptor en el celular
 
-- **Estado:** Propuesta
+- **Estado:** Aceptada (2026-10-26)
 - **Fecha:** 2026-10-26
-- **Decide:** ambos (dirección pedida por Deisy; redacción y análisis de Claude, pendiente de aprobación)
+- **Decide:** Deisy (aceptada el 2026-10-26; redacción y análisis de Claude)
 - **Equipo donde se tomó:** PC principal (`DESKTOP-7O57OU0`, `C:\aura`)
 - **Relacionadas:** ADR-0005 (dos vías), ADR-0007 (secretos en NVS), ADR-0010 (0.1.3 solo local), ADR-0013 (kit
   portátil), ADR-0018 (presencia no disponible)
@@ -83,7 +83,7 @@ La configuración del router se documenta en `docs/red_aura.md`, sin contraseña
   reinicio de la placa si la secuencia caía más de 1 000 000; ahora usa una ventana de desorden de 1000 datagramas
   con confirmación sostenida (20 datagramas). Afecta solo al resumen de pérdida, no al CSV ni al visor.
 - Obliga a: completar `docs/red_aura.md` con lo que dicte Deisy; prueba en la red con el celular (criterios en
-  `docs/ensayos/kit_movil_criterios.md`, fuente única que lee `verificar_captura.py`: pérdida ≤ 2 %, 0 huecos
+  `docs/ensayos/kit_movil_criterios.md`, fuente única que lee `verificar_captura.py`: pérdida < 1 %, 0 huecos
   mayores de 5 s por placa y mediana de CSI/s en ventanas de 10 s ≥ 80 % de la de S002 (100,40/s → 80,32/s);
   fijados por Deisy el 2026-10-26 antes de la prueba); en otra fase, cargar wifi1 = AURA-LAB en la NVS (sin grabar firmware).
 
