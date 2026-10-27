@@ -8,11 +8,14 @@
   el primer positivo de cada cruce (criterio de K002). La plantilla analisis/escena_k002/index.html se copia al lado.
 - La salida queda en datos/procesados (fuera de git): son datos de una prueba con una persona.
 - POST /guardar?nombre=<archivo>.png guarda la imagen (PNG en base64) en datos/procesados/video_K002/capturas/.
+- La figura usa el modelo "Animated Human" de Quaternius (CC0, poly.pizza/m/c3Ibh9I3udk), descargado con
+  autorizacion de Deisy en escena/modelos/ (fuera de git). 'preparar' comprueba su SHA-256.
 """
 
 import argparse
 import base64
 import csv
+import hashlib
 import json
 import re
 import shutil
@@ -29,6 +32,8 @@ ENTRADA = RAIZ / "datos" / "crudos" / "K002_local.csv"
 PLANTILLA = Path(__file__).resolve().parent / "escena_k002" / "index.html"
 DESTINO = RAIZ / "datos" / "procesados" / "video_K002" / "escena"
 CAPTURAS = RAIZ / "datos" / "procesados" / "video_K002" / "capturas"
+MODELO = DESTINO / "modelos" / "quaternius_animated_human.glb"
+MODELO_SHA256 = "ce4d543e82e455d5a1253798c9759f12b9eec74929ddbca464447eeaa3a42c5d"
 CRUCES = [30 + 25 * k for k in range(10)]
 ANTES_S, DESPUES_S = 3.0, 8.0
 
@@ -68,6 +73,10 @@ def preparar() -> int:
                                            encoding="utf-8")
     shutil.copy2(PLANTILLA, DESTINO / "index.html")
     print(f"{len(t)} muestras, {len(csi_t)} CSI en {n_seg} s; detectados {sum(p is not None for p in primeros)}/10")
+    if not MODELO.exists():
+        print(f"AVISO: falta el modelo de la figura ({MODELO}); la escena no se dibuja sin el")
+    elif hashlib.sha256(MODELO.read_bytes()).hexdigest() != MODELO_SHA256:
+        print(f"AVISO: el SHA-256 de {MODELO.name} no coincide con el descargado el 27/10/2026")
     print(f"Escena en {DESTINO}")
     return 0
 
