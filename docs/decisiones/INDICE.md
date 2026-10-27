@@ -24,5 +24,6 @@
 | [ADR-0020](adr/ADR-0020-regla-instalacion-prueba-cobertura.md) | Regla de instalación y prueba de cobertura como dirección | Aceptada (2026-10-26) | Deisy |
 | [ADR-0021](adr/ADR-0021-ftm-distancia-entre-placas.md) | FTM para estimar la distancia entre placas (por evaluar) | Propuesta (2026-10-26) | ambos |
 | [ADR-0023](adr/ADR-0023-red-aura-aislada-router-propio.md) | Red AURA aislada con router propio (AURA-LAB = wifi1, hotspot = wifi2) y receptor en el celular sin clave local | Aceptada (2026-10-26) | Deisy |
+| [ADR-0024](adr/ADR-0024-filtro-csi-mac-destino.md) | Filtrar el CSI por MAC de destino (solo tramas dirigidas a la placa; firmware 0.1.5) | Propuesta (2026-10-27) | Deisy |
 
 Pendientes de decidir: remoto privado para git; plan Blaze para push; modo CSI 8 vs 12 bits; firmware para placas A y C.
