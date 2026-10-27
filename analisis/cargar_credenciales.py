@@ -86,13 +86,28 @@ def pedir_doble(texto: str) -> str:
     return ""
 
 
+def drenar(ser, pausa: float = 0.5):
+    """Vacia lo acumulado mientras se escribia un valor (el puerto abierto sin leer llena el buffer de la PC y el
+    de salida de la placa, 4 KB, y la placa DESCARTA lineas: aura_salida.c usb_escribir). Fallo del 26/10/2026: la
+    confirmacion de wifi1_ssid se perdio asi. Tras vaciar, se espera a que la placa descargue lo pendiente."""
+    ser.reset_input_buffer()
+    time.sleep(pausa)
+    ser.reset_input_buffer()
+
+
 def enviar(ser, clave: str, valor: str) -> bool:
+    drenar(ser)
     ser.write(f"AURA SET {clave} {valor.encode('utf-8').hex()}\n".encode())
     r = esperar_respuesta(ser, lambda m: m.get("type") == "ack" and m.get("cmd") == "AURA_SET"
-                          and m.get("detail") == clave)
-    ok = bool(r and r.get("ok"))
-    print(f"  {clave}: {'guardada' if ok else 'ERROR (sin confirmacion)'}")
-    return ok
+                          and m.get("detail") == clave, timeout=8.0)
+    if r is None:
+        print(f"  {clave}: SIN RESPUESTA en 8 s (la placa pudo guardarla igual; repetir el envio)")
+        return False
+    if not r.get("ok"):
+        print(f"  {clave}: RECHAZADA por la placa (ok=false: nombre, longitud > 255 o error de NVS)")
+        return False
+    print(f"  {clave}: guardada (confirmada por la placa)")
+    return True
 
 
 def cuenta_firebase(web: dict, claves: list[str], uid_esperado: str) -> dict:
@@ -215,6 +230,7 @@ def main() -> int:
                 continue
             enviar(ser, clave, valor)
             valor = None
+        drenar(ser)
         estado = listar(ser)
         print("Definidas en la placa:", ", ".join(f"{k}={'si' if v else 'no'}" for k, v in (estado or {}).items()))
         if args.reiniciar:

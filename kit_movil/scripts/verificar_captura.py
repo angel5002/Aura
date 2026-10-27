@@ -6,9 +6,9 @@ se suscribe a una sola IP):
   1. perdida < perdida_menor_que_pct (estricto), por numero de secuencia (mismo contador que receptor_local.py);
   2. 0 huecos mayores de hueco_max_s: tiempo entre dos datagramas A1 consecutivos segun t_pc_unix;
   3. mediana de CSI/s en ventanas completas de ventana_tasa_s >= tasa_csi_factor_min x tasa_csi_ref_s002.
-Informa ademas: t_us = 0 (placa sin SNTP), reinicios (por ts_ms y por secuencia) y, de los mensajes 'telemetria',
-motivo_reinicio y encendido_s por arranque (encendido = alimentacion, brownout = caida de tension, panico/wdt =
-fallo de software). Solo lee: no cambia nada ni registra en docs/resultados_pruebas.md.
+Informa ademas (sin criterio): t_us = 0 (placa sin hora valida), reinicios (por ts_ms y por secuencia) y, de los
+mensajes 'telemetria', motivo_reinicio y encendido_s por arranque (encendido = alimentacion, brownout = caida de
+tension, panico/wdt = fallo de software) y la memoria minima por intervalo de 10 s (heap_min_intervalo). Solo lee: no cambia nada ni registra en docs/resultados_pruebas.md.
 
 Ejemplo:
     python verificar_captura.py ../datos/crudos/K001_local.csv
@@ -93,10 +93,13 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
                     enc, motivo = tel["encendido_s"], tel.get("motivo_reinicio", "?")
                     a = arranques[-1] if arranques else None
                     if a is None or enc < a["enc_fin"] or motivo != a["motivo"]:
-                        arranques.append({"motivo": motivo, "enc_ini": enc, "enc_fin": enc, "t_ini": t, "t_fin": t,
-                                          "n": 1})
+                        a = {"motivo": motivo, "enc_ini": enc, "enc_fin": enc, "t_ini": t, "t_fin": t, "n": 1,
+                             "heap_int": []}
+                        arranques.append(a)
                     else:
                         a.update(enc_fin=enc, t_fin=t, n=a["n"] + 1)
+                    if isinstance(tel.get("heap_min_intervalo"), (int, float)):
+                        a["heap_int"].append(tel["heap_min_intervalo"])
 
     print(f"\n== {ruta.name}")
     n = sum(por_tipo.values())
@@ -107,7 +110,8 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
     res = cont.resumen(final=True)
     tasas = ", ".join(f"{k} {v / dur:.1f}/s" for k, v in sorted(por_tipo.items())) if dur > 0 else "-"
     print(f"  duracion {dur:.1f} s (t_pc_unix), {n} datagramas: {tasas}")
-    print(f"  t_us = 0 en {t_us_cero} de {n} ({100 * t_us_cero / n:.1f} %; 100 % = placa sin SNTP)")
+    print(f"  t_us = 0 en {t_us_cero} de {n} ({100 * t_us_cero / n:.1f} %; 100 % = placa sin hora valida; tras un "
+          f"reinicio por software puede conservar la anterior)")
     print(f"  secuencia: esperados {res['esperados']}, perdidos {res['perdidos']}, desordenados {res['desordenados']}, "
           f"duplicados {res['duplicados']}, epocas {res['epocas']} (reinicios por ts_ms {res['reinicios_por_ts']}, "
           f"por secuencia {res['reinicios_por_secuencia']})")
@@ -116,6 +120,10 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
         for a in arranques:
             print(f"    motivo_reinicio={a['motivo']}, encendido_s {a['enc_ini']} -> {a['enc_fin']}, "
                   f"de {a['t_ini'] - t_ini:.1f} s a {a['t_fin'] - t_ini:.1f} s del archivo")
+            if a["heap_int"]:
+                h = a["heap_int"]
+                print(f"      [INFORMATIVO] memoria minima por intervalo de 10 s (heap_min_intervalo): "
+                      f"min {min(h)} B, mediana {statistics.median(h):.0f} B, en {len(h)} intervalos")
     else:
         print("  telemetria: ningun mensaje (llega cada 10 s; sin ella no se sabe el motivo de un reinicio)")
 

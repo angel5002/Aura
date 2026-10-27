@@ -2,6 +2,14 @@
 
 Android con Termux. La versión está en el archivo `VERSION`.
 
+## 0.1.2 — 26/10/2026 (antes de la prueba del kit)
+
+- `LEEME.md`: la prueba del kit es **un solo bloque de 30 min**, solo con el celular, sala vacía y el montaje de
+  siempre (sección 5.a); la recepción simultánea con la laptop (5.b) queda solo como diagnóstico opcional, fuera de
+  los criterios. Nota sobre la hora conservada tras un reinicio por software (F2).
+- `verificar_captura.py` (0fbc3d92b85dd364): informa la memoria mínima por intervalo de 10 s de la telemetría
+  (`heap_min_intervalo`), solo como dato. Criterios sin cambios.
+
 ## 0.1.1 — 26/10/2026 (antes de la primera prueba)
 
 - Pérdida **< 1 %** (estricto) en vez de ≤ 2 %, decidido por Deisy; la clave del documento de criterios pasa a

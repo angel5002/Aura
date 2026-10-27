@@ -1,4 +1,4 @@
-# Kit móvil de AURA (Termux en Android) — versión 0.1.1
+# Kit móvil de AURA (Termux en Android) — versión 0.1.2
 
 Recibe la vía local de la placa en el **celular**, sin PC, dentro de la red **AURA-LAB** (router propio, sin
 internet; ver `docs/red_aura.md` y ADR-0023, **Aceptada** el 2026-10-26). Graba el mismo CSV que la laptop (`<código>_local.csv`,
@@ -73,9 +73,29 @@ python receptor_local.py --id-sesion K001 --duracion 1800 --ip <IP_DE_LA_PLACA> 
 - Si la placa cae al hotspot (wifi2), cambia de IP y el receptor deja de recibir: detenlo y vuelve a lanzarlo con la
   IP nueva.
 
-### 5.b Primera prueba (opcional): recibir a la vez con la laptop
+### 5.a Prueba del kit (una sola vez, antes de usarlo en un salón)
 
-Sirve para **separar el efecto del router del efecto del celular**. La placa acepta hasta 3 receptores a la vez y
+Un **solo bloque de 30 min**, con el **celular como único receptor**, la **sala vacía** y el montaje de siempre
+(placa y router en su sitio; nadie se mueve en la zona). Sin laptop.
+
+1. Lee la IP de la placa en el panel del router.
+2. `termux-wake-lock`, y en `~/kit_movil/scripts`:
+   ```
+   python receptor_local.py --id-sesion K001 --duracion 1800 --ip <IP_DE_LA_PLACA> --sin-bind
+   ```
+   Deja que termine solo (no uses Ctrl + C) y no cierres Termux.
+3. Revisa con `verificar_captura.py` (sección 6) y lleva los datos a la PC (sección 7).
+
+Criterios (fijados antes de la prueba): pérdida **< 1 %**, **0 huecos mayores de 5 s**, mediana de CSI/s en
+ventanas de 10 s **≥ 80,32/s**, **0 reinicios** de la placa y **Termux sin cierres** durante el bloque. Los tres
+primeros los evalúa `verificar_captura.py` desde `docs/ensayos/kit_movil_criterios.md`; los reinicios los informa
+(épocas y arranques de la telemetría) y el cierre de Termux se ve en que el receptor no terminó solo (falta
+`K001_local_resumen.json` o dura menos de 1800 s). Si algo falla, se registra **FALLIDO** y el diagnóstico
+(router o celular) se hace después, p. ej. con la sección 5.b.
+
+### 5.b Diagnóstico opcional (NO forma parte de la prueba ni de sus criterios): recibir a la vez con la laptop
+
+Solo si la prueba del kit falla. Sirve para **separar el efecto del router del efecto del celular**. La placa acepta hasta 3 receptores a la vez y
 envía cada datagrama, con el mismo número de secuencia, a todos (`firmware/aura_nodo/main/aura_local.c:100-118` y
 `:169`; máximo en `firmware/versiones/0.1.3/sdkconfig.usado:731`; leído en el código, **nunca medido con dos
 receptores a la vez**). Así las dos capturas son comparables datagrama a datagrama.
@@ -111,7 +131,11 @@ El verificador lee los umbrales de `docs/ensayos/kit_movil_criterios.md` (copia 
 repositorio; es la única fuente). Hoy: pérdida **< 1 %**; **0 huecos mayores de 5 s por placa**; mediana de CSI/s
 en ventanas de 10 s **≥ 80,32/s** (80 % de S002). También informa los reinicios y, de la telemetría de la placa,
 `motivo_reinicio` y `encendido_s` por arranque (`encendido` = se cortó la alimentación o se desenchufó;
-`brownout` = caída de tensión, p. ej. power bank débil; `panico`/`wdt` = fallo de software).
+`brownout` = caída de tensión, p. ej. power bank débil; `panico`/`wdt` = fallo de software) y, solo como dato, la
+memoria mínima por intervalo de 10 s (`heap_min_intervalo`).
+
+Hora de la placa: tras un reinicio por software la placa conserva la hora anterior (F2, 26/10/2026), así que
+`t_us` puede no ser 0 aunque AURA-LAB no tenga internet. No importa: la referencia es siempre `t_pc_unix`.
 
 Un criterio no cumplido se registra como **FALLIDO**; el criterio no se cambia después de ver el resultado.
 
