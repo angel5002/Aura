@@ -87,3 +87,11 @@ Cada ejecucion agrega una fila; no se editan filas anteriores.
 | 2026-10-26 21:23 | T4b desorden y duplicados | desordenados 99 (intercambios 99), duplicados 10 de 10, unicos 4950 | desorden detectado; duplicados no cuentan como recibidos | **APROBADA** |  |
 | 2026-10-26 21:23 | T4c todo guardado | 4960 filas de 4960 datagramas enviados | filas = datagramas que llegaron | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_local.csv |
 | 2026-10-26 21:23 | T4d reproduccion | 20 cuadros PNG reconstruidos | >= 5 cuadros desde el archivo | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_cuadros |
+| 2026-10-26 21:55 | T4a perdida informada | 45.939 % (real 1.0 %: 50 de 5000) | entre 0,8 % y 1,2 % | **FALLIDA** |  |
+| 2026-10-26 21:55 | T4b desorden y duplicados | desordenados 106 (intercambios 99), duplicados 1 de 10, unicos 4959 | desorden detectado; duplicados no cuentan como recibidos | **FALLIDA** |  |
+| 2026-10-26 21:55 | T4c todo guardado | 4960 filas de 4960 datagramas enviados | filas = datagramas que llegaron | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_local.csv |
+| 2026-10-26 21:55 | T4d reproduccion | 20 cuadros PNG reconstruidos | >= 5 cuadros desde el archivo | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_cuadros |
+| 2026-10-26 21:56 | T4a perdida informada | 1.000 % (real 1.0 %: 50 de 5000) | entre 0,8 % y 1,2 % | **APROBADA** |  |
+| 2026-10-26 21:56 | T4b desorden y duplicados | desordenados 99 (intercambios 99), duplicados 10 de 10, unicos 4950 | desorden detectado; duplicados no cuentan como recibidos | **APROBADA** |  |
+| 2026-10-26 21:56 | T4c todo guardado | 4960 filas de 4960 datagramas enviados | filas = datagramas que llegaron | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_local.csv |
+| 2026-10-26 21:56 | T4d reproduccion | 20 cuadros PNG reconstruidos | >= 5 cuadros desde el archivo | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_cuadros |

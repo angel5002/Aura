@@ -74,6 +74,42 @@ Rechazo comprobado en 4 variantes de S002 (mezcla de 0 y > 0, todo 0, retroceso,
 
 Copias temporales de S002 creadas para estas pruebas: borradas.
 
+## Tercera parte (después de los commits 8d0b8bf y 266000a)
+
+**Telemetría y reinicios (solo revisión).** No hay contador de arranques. Por la vía local llegan `sample.ts_ms`
+(milisegundos desde el arranque, `esp_timer`, `firmware/aura_nodo/main/web_serial_monitor.c:271`; ~17/s en S002) y
+`telemetria` cada 10 s con `encendido_s` y `motivo_reinicio` (`aura_telemetria.c:182-183`, `:213-214`). El mensaje
+`arranque` (`app_main.c:51`) se emite antes de que haya suscriptores y no llega al receptor (inferido del código,
+`aura_local.c:166`). Propuesta, no implementada: en el receptor, reinicio = `ts_ms` de una muestra menor que el de
+la anterior; detecta reinicios a cualquier edad (también en bucle) y sin SNTP; la regla de la secuencia queda como
+respaldo.
+
+**Relojes en la evaluación (solo revisión).** `evaluar_deteccion.py` lee la captura USB (`S002.csv`) y usa
+`t_pc_unix − t_pc_unix de la primera línea` (`evaluar_deteccion.py:63-77`); no usa `t_us` ni `ts_ms`. Las etiquetas
+de `sesion_programada.py` son horas de la misma PC (`time.time()`, `:62-63`, `:78`, `:147-151`). Mismo reloj: **sin
+sesgo por mezcla y sin recálculo por esa causa**. Lo que queda es el retraso de llegada, medido en S002 entre WiFi y USB
+para la misma muestra: mediana +2,6 ms (p5 −7,0; p95 +6,7 ms). `latencias_S002.csv` (24/10 01:18) se calculó con las
+etiquetas del plan anulado (`S002_etiquetas_plan_no_seguido.csv`); al reetiquetar (01:21) no se sobrescribió porque no
+hay cambios de condición (`evaluar_deteccion.py:271`). Está obsoleto y ningún documento lo cita.
+
+**Fase 1 de `kit_movil/`.** Versión 0.1.0: copias exactas de `receptor_local.py`, `aura_proto.py` y del nuevo
+`analisis/verificar_captura.py`, con `LEEME.md`, `CAMBIOS.md` y `VERSION`. Probado en la PC: el verificador con S002
+y F1 (cumplen); el receptor del kit con una placa simulada (2 500 datagramas con `t_us` = 0, un hueco de 6 s y un
+reinicio): 2 épocas, 0 pérdida, hueco marcado FALLIDO. Prueba sintética: solo demuestra que corre. No verificado en
+Android. `.gitignore` ahora excluye `kit_captura/datos/` y `kit_movil/datos/`.
+
+## Cuarta parte (configuración final, criterios y reinicios por ts_ms)
+
+- `docs/red_aura.md`: WPA2-PSK; sin reserva DHCP (IP de B en la lista de conectados antes de cada sesión);
+  aislamiento de clientes a comprobar en la prueba.
+- `docs/ensayos/kit_movil_criterios.md` (nuevo, fuente única; commit `57a3349` antes de la prueba): pérdida ≤ 2 %
+  (antes < 1 %, cambio de Deisy antes de la prueba), 0 huecos > 5 s, mediana de CSI/s en ventanas de 10 s ≥ 80 % de
+  S002 = 80,32/s (S002 = 100,40/s, medido con el verificador).
+- `receptor_local.py`: reinicios por `ts_ms` (aprobado), respaldo por secuencia. T4: FALLIDA con la primera versión,
+  APROBADA tras corregir. Sintéticas 9/9 y 8/8 (solo demuestran que el código corre).
+- `verificar_captura.py`: lee los criterios del documento; informa `motivo_reinicio` y `encendido_s`.
+- Borrado `datos/procesados/latencias_S002.csv` (obsoleto).
+
 ## Pruebas
 - T4 (receptor simulado): primera ejecución con el cambio: T4a, T4b **FALLIDAS**, T4c, T4d APROBADAS; tras la
   corrección: T4a–d **APROBADAS** (`docs/resultados_pruebas.md`).
@@ -90,4 +126,8 @@ Copias temporales de S002 creadas para estas pruebas: borradas.
   video del 30/10/2026** (decisión de Deisy). Después: **generar ambos kits (`kit_captura/` y `kit_movil/`) desde
   `analisis/` con un script**, en vez de copias a mano.
 - Criterio agregado antes de la prueba del kit móvil: 0 huecos mayores de 5 s por placa (`docs/guia_salon.md:95-97`).
+- `kit_movil/` probado solo en la PC; la primera captura en el celular es su prueba.
+- La referencia de tasa (S002) se tomó con el router de casa; en AURA-LAB la tasa depende de la respuesta al ping del
+  B315s (no verificado).
+- Fase 2 (cargar wifi1 = AURA-LAB en B): pendiente de la confirmación de Deisy.
 - ADR-0022 (respaldo del repositorio) sigue pendiente; esta ADR toma el número 0023.

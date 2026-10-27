@@ -1,6 +1,9 @@
 # --- Datos de sesiones con personas: SENSIBLES, nunca a git ---
 datos/crudos/*
 datos/procesados/*
+# capturas guardadas dentro de los kits (datos de personas, fuera de git)
+kit_captura/datos/
+kit_movil/datos/
 !datos/crudos/.gitkeep
 !datos/procesados/.gitkeep
 # Por si se guardan capturas fuera de datos/

@@ -3,10 +3,10 @@
 - Descubrimiento: escucha los anuncios "AURA-ANUNCIO" (UDP 45455) o usa --ip.
 - Suscripcion: "SUB <nombre>" cada 10 s (la placa da 30 s de concesion).
 - Graba cada datagrama en C:\\aura\\datos\\crudos\\<id>_local.csv (t_pc_unix, linea), mismo formato que capturar.py.
-- Mide perdidas con el numero de secuencia: maneja desorden y duplicados; si la placa se reinicia
-  (la secuencia cae mas que VENTANA_DESORDEN, de forma sostenida) abre una "epoca" nueva y suma las perdidas de cada
-  una. LIMITE: un reinicio ocurrido antes de que la placa llegue a ~1000 datagramas desde su arranque anterior no se
-  detecta (p. ej., reinicios en bucle): se cuenta como duplicados y el resumen de perdida sale mal. El CSV no cambia.
+- Mide perdidas con el numero de secuencia: maneja desorden y duplicados; si la placa se reinicia abre una "epoca"
+  nueva y suma las perdidas de cada una. Reinicio = el ts_ms de una muestra 'sample' (ms desde el arranque de la
+  placa) es menor que el de la muestra anterior; respaldo sin muestras: la secuencia cae mas que VENTANA_DESORDEN de
+  forma sostenida (LIMITE del respaldo: no ve reinicios antes de ~1000 datagramas desde el arranque anterior).
 - Informa cada 5 s la tasa por tipo y el porcentaje de perdida; al final guarda <id>_local_resumen.json.
 - Puede alimentar el panel en vivo (visor.py) mediante la funcion 'al_recibir'.
 
@@ -42,6 +42,26 @@ VENTANA_DESORDEN = 1000
 # telemetria de la placa (encendido_s, motivo de reinicio).
 # No hay rezagados de la epoca anterior: entre el ultimo datagrama y el primero tras el reinicio pasan segundos.
 CONFIRMAR_REINICIO = 20
+# Regla principal (aprobada por Deisy el 26/10/2026): reinicio = ts_ms de una muestra menor que el de la anterior.
+# ts_ms = esp_timer desde el arranque (web_serial_monitor.c:271), ~17 muestras/s en S002. Se toleran retrocesos de
+# hasta TOLERANCIA_TS_MS por desorden (medido: 0; las muestras van cada ~60 ms). Una muestra con la misma secuencia
+# y el mismo ts_ms que otra ya vista es un duplicado, no un reinicio (T4 manda duplicados con otro contenido).
+# Limites: (a) si la placa muere con menos uptime que el que tiene al enviar su primera muestra tras arrancar (+ la
+# tolerancia), el reinicio no se ve por ts_ms; (b) si el arranque nuevo repite exactamente secuencia y milisegundo
+# del anterior (la numeracion empieza al llegar el SUB, que va cada 10 s: improbable), tampoco. En ambos casos queda
+# el respaldo por secuencia.
+TOLERANCIA_TS_MS = 500
+
+
+def ts_muestra(d) -> int | None:
+    """ts_ms de un datagrama 'hms' con una muestra {"type":"sample","ts_ms":...}; None en otro caso."""
+    if d.tipo != "hms" or '"type":"sample"' not in d.cuerpo:
+        return None
+    try:
+        v = json.loads(d.cuerpo).get("ts_ms")
+    except json.JSONDecodeError:
+        return None
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
 class ContadorSecuencia:
@@ -58,19 +78,42 @@ class ContadorSecuencia:
         self.ventana_desorden = ventana_desorden
         self.confirmar_reinicio = confirmar_reinicio
         self.candidatos = []      # caidas mayores que la ventana aun sin clasificar (reinicio o duplicados viejos)
+        self.ultimo_ts = None     # mayor ts_ms visto en la epoca actual
+        self.muestras = {}        # seq -> ts_ms de las muestras de la epoca actual (para reconocer duplicados)
+        self.reinicios_ts = 0
+        self.reinicios_secuencia = 0
 
-    def agregar(self, seq: int):
+    def agregar(self, seq: int, ts_ms: int | None = None):
+        """ts_ms: el de la muestra si el datagrama es un 'sample' (ver ts_muestra); None para el resto."""
+        duplicada = ts_ms is not None and self.muestras.get(seq) == ts_ms
+        if ts_ms is not None and not duplicada and self.ultimo_ts is not None \
+                and ts_ms < self.ultimo_ts - TOLERANCIA_TS_MS:
+            pendientes, self.candidatos = self.candidatos, []
+            self._cerrar_epoca()          # la placa se reinicio (regla principal: ts_ms retrocede)
+            self.reinicios_ts += 1
+            for s in pendientes:          # datagramas del arranque nuevo que llegaron antes de esta muestra
+                self._contar(s)
+            self._contar(seq)
+            self._anotar_ts(seq, ts_ms)
+            return
         if self.max is not None and seq < self.max - self.ventana_desorden:
             self.candidatos.append(seq)
             if len(self.candidatos) >= self.confirmar_reinicio and \
                     max(self.candidatos) - min(self.candidatos) < self.ventana_desorden:
                 pendientes, self.candidatos = self.candidatos, []
-                self._cerrar_epoca()      # la placa se reinicio
+                self._cerrar_epoca()      # la placa se reinicio (respaldo: la secuencia cae de forma sostenida)
+                self.reinicios_secuencia += 1
                 for s in pendientes:
                     self._contar(s)
             return
         self._vaciar_candidatos()
         self._contar(seq)
+        if ts_ms is not None and not duplicada:
+            self._anotar_ts(seq, ts_ms)
+
+    def _anotar_ts(self, seq: int, ts_ms: int):
+        self.muestras[seq] = ts_ms
+        self.ultimo_ts = ts_ms if self.ultimo_ts is None else max(self.ultimo_ts, ts_ms)
 
     def _vaciar_candidatos(self):
         """Las caidas no confirmadas como reinicio se cuentan en la epoca actual (duplicados o desorden)."""
@@ -95,6 +138,7 @@ class ContadorSecuencia:
         viejos = [s for s in self.vistos if s < limite]
         self._unicos_podados = getattr(self, "_unicos_podados", 0) + len(viejos)
         self.vistos.difference_update(viejos)
+        self.muestras = {s: t for s, t in self.muestras.items() if s >= limite}
 
     def _cerrar_epoca(self):
         if self.min is not None:
@@ -102,6 +146,8 @@ class ContadorSecuencia:
         self.min = self.max = None
         self.vistos = set()
         self._unicos_podados = 0
+        self.ultimo_ts = None
+        self.muestras = {}
 
     def resumen(self, final: bool = False) -> dict:
         """final=True: al terminar, las caidas aun sin clasificar se cuentan en la epoca actual."""
@@ -117,6 +163,7 @@ class ContadorSecuencia:
             "esperados": esperados, "recibidos_unicos": recibidos, "perdidos": perdidos,
             "perdida_pct": 100.0 * perdidos / esperados if esperados else 0.0,
             "desordenados": self.desordenados, "duplicados": self.duplicados, "epocas": len(epocas),
+            "reinicios_por_ts": self.reinicios_ts, "reinicios_por_secuencia": self.reinicios_secuencia,
         }
 
 
@@ -187,7 +234,7 @@ def recibir(ip: str, puerto: int, destino: Path, duracion: float, nombre: str = 
                     otros += 1
                     continue
                 ultimo_dato = t
-                cont.agregar(d.seq)
+                cont.agregar(d.seq, ts_muestra(d))
                 por_tipo[d.tipo] += 1
                 if al_recibir:
                     al_recibir(t, d)
@@ -246,7 +293,8 @@ def main() -> int:
     (DIR_CRUDOS / f"{args.id_sesion}_local_resumen.json").write_text(json.dumps(r, indent=2), encoding="utf-8")
     print("\n--- Resumen ---")
     for k in ("duracion_s", "por_tipo", "tasa_total_por_s", "esperados", "recibidos_unicos", "perdidos",
-              "perdida_pct", "desordenados", "duplicados", "epocas"):
+              "perdida_pct", "desordenados", "duplicados", "epocas",
+              "reinicios_por_ts", "reinicios_por_secuencia"):
         print(f"{k:>18}: {r[k]}")
     return 0
 
