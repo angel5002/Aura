@@ -11,7 +11,9 @@ se suscribe a una sola IP):
      <id>*_local.csv en la carpeta.
 Informa ademas (sin criterio): t_us = 0 (placa sin hora valida), reinicios (por ts_ms y por secuencia) y, de los
 mensajes 'telemetria', motivo_reinicio y encendido_s por arranque (encendido = alimentacion, brownout = caida de
-tension, panico/wdt = fallo de software) y la memoria minima por intervalo de 10 s (heap_min_intervalo). Solo lee: no cambia nada ni registra en docs/resultados_pruebas.md.
+tension, panico/wdt = fallo de software), la memoria minima por intervalo de 10 s (heap_min_intervalo) y el % de
+tiempo en MOVIMIENTO (motion_status de las muestras). Solo lee: no cambia nada ni registra en
+docs/resultados_pruebas.md.
 
 Ejemplo:
     python verificar_captura.py ../datos/crudos/K001_local.csv
@@ -34,6 +36,7 @@ CRITERIOS = RAIZ / "docs" / "ensayos" / "kit_movil_criterios.md"
 CLAVES = ("perdida_menor_que_pct", "hueco_max_s", "ventana_tasa_s", "tasa_csi_factor_min", "tasa_csi_ref_s002",
           "reinicios_max", "archivos_por_sesion")
 SUFIJO = "_local.csv"
+MAX_TRAMO_MOV_S = 1.0           # % en MOVIMIENTO: una muestra no rige mas de 1 s (las muestras van a ~18/s)
 
 
 def leer_criterios(ruta: Path) -> dict:
@@ -73,6 +76,7 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
     arranques = []              # por arranque segun la telemetria: dict motivo, enc_ini, enc_fin, t_ini, t_fin, n
     retrocesos_enc = 0          # veces que encendido_s retrocede (reinicio visto por la telemetria)
     n_tel = 0
+    muestras_mov = []           # (t_pc_unix, motion_status) de los mensajes 'sample'
     t_ini = t_fin = None
     with open(ruta, newline="", encoding="utf-8") as f:
         r = csv.reader(f)
@@ -109,6 +113,13 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
                         a.update(enc_fin=enc, t_fin=t, n=a["n"] + 1)
                     if isinstance(tel.get("heap_min_intervalo"), (int, float)):
                         a["heap_int"].append(tel["heap_min_intervalo"])
+                elif '"type":"sample"' in d.cuerpo:
+                    try:
+                        m = json.loads(d.cuerpo)
+                    except json.JSONDecodeError:
+                        m = None
+                    if isinstance(m, dict) and "motion_status" in m:
+                        muestras_mov.append((t, bool(m["motion_status"])))
 
     print(f"\n== {ruta.name}")
     n = sum(por_tipo.values())
@@ -135,6 +146,16 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
                       f"min {min(h)} B, mediana {statistics.median(h):.0f} B, en {len(h)} intervalos")
     else:
         print("  telemetria: ningun mensaje (llega cada 10 s; sin ella no se sabe el motivo de un reinicio)")
+    if len(muestras_mov) >= 2:
+        # Cada muestra rige hasta la siguiente, con un tope de MAX_TRAMO_MOV_S para no contar los huecos.
+        tot = mov = 0.0
+        for (t0, m0), (t1, _) in zip(muestras_mov, muestras_mov[1:]):
+            dt = min(t1 - t0, MAX_TRAMO_MOV_S)
+            tot += dt
+            mov += dt if m0 else 0.0
+        n_mov = sum(m for _, m in muestras_mov)
+        print(f"  [INFORMATIVO] tiempo en MOVIMIENTO (motion_status de las muestras): {100 * mov / tot:.2f} % "
+              f"({n_mov} de {len(muestras_mov)} muestras); con la sala vacia sirve para comparar con S002")
 
     ok = True
     pend = False

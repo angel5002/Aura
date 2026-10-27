@@ -20,7 +20,9 @@ Protocolo de la prueba del kit (`kit_movil/LEEME.md`, 5.a): un solo bloque de 30
 celular como receptor, sala vacía y el mismo montaje.
 
 Además se informa, sin criterio: `t_us` = 0 (placa sin hora válida; tras un reinicio por software la placa puede
-conservar la hora anterior, F2), reinicios por secuencia (respaldo), la memoria mínima por intervalo y, de la
+conservar la hora anterior, F2), reinicios por secuencia (respaldo), la memoria mínima por intervalo, el **% de
+tiempo en MOVIMIENTO** (`motion_status` de las muestras; con la sala vacía se compara con S002: 0,25 % en su tramo
+"vacía" de 290 s, 0,15 % en todo el archivo; aproximado) y, de la
 telemetría de la placa, `motivo_reinicio` y `encendido_s`, para distinguir cortes de alimentación (`encendido`),
 caídas de tensión (`brownout`) y fallos de software (`panico`, `wdt*`).
 
@@ -53,3 +55,5 @@ tasa depende de cuánto responde el B315s al ping de la placa (no verificado).
 - 2026-10-26: tasa de CSI con umbral numérico (antes "~100/s", sin umbral), decidido por Deisy antes de la prueba.
 - 2026-10-26: criterios 4 (0 reinicios) y 5 (Termux sin cierres) con su definición, decididos por Deisy antes de la
   prueba; `receptor_local.py` guarda en el resumen por qué terminó (`fin`) y la duración pedida.
+- 2026-10-27: dato informativo (no criterio) del % de tiempo en MOVIMIENTO para comparar K001 (sala vacía) con S002,
+  pedido por Deisy tras ver ~436 CSI/s en K000 (S002: ~100/s). Ningún umbral cambia.

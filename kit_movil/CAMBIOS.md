@@ -2,6 +2,12 @@
 
 Android con Termux. La versión está en el archivo `VERSION`.
 
+## 0.1.6 — 27/10/2026 (después de K000, antes de K001)
+
+- `verificar_captura.py` informa el % de tiempo en MOVIMIENTO (`motion_status` de las muestras; cada muestra rige
+  hasta la siguiente, con tope de 1 s), solo como dato. Criterios sin cambios; el documento de criterios anota la
+  referencia de S002 (0,25 % en su tramo "vacía").
+
 ## 0.1.5 — 27/10/2026 (preparación del celular; antes de K000/K001)
 
 - `scripts/exportar.sh` (nuevo, propio del kit): copia `<código>_local.csv` y su resumen a

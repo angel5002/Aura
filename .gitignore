@@ -1,4 +1,8 @@
 # --- Datos de sesiones con personas: SENSIBLES, nunca a git ---
+# Todo lo que haya en datos/ (p. ej. exportaciones copiadas del celular, datos/K000/), salvo las dos carpetas base
+datos/*
+!datos/crudos/
+!datos/procesados/
 datos/crudos/*
 datos/procesados/*
 # capturas guardadas dentro de los kits (datos de personas, fuera de git)

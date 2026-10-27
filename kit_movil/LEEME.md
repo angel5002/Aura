@@ -1,4 +1,4 @@
-# Kit móvil de AURA (Termux en Android) — versión 0.1.5
+# Kit móvil de AURA (Termux en Android) — versión 0.1.6
 
 Recibe la vía local de la placa en el **celular**, sin PC, dentro de la red **AURA-LAB** (router propio, sin
 internet; ver `docs/red_aura.md` y ADR-0023, **Aceptada** el 2026-10-26). Graba el mismo CSV que la laptop (`<código>_local.csv`,
