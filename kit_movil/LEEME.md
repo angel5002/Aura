@@ -1,4 +1,4 @@
-# Kit móvil de AURA (Termux en Android) — versión 0.1.2
+# Kit móvil de AURA (Termux en Android) — versión 0.1.3
 
 Recibe la vía local de la placa en el **celular**, sin PC, dentro de la red **AURA-LAB** (router propio, sin
 internet; ver `docs/red_aura.md` y ADR-0023, **Aceptada** el 2026-10-26). Graba el mismo CSV que la laptop (`<código>_local.csv`,
@@ -87,10 +87,10 @@ Un **solo bloque de 30 min**, con el **celular como único receptor**, la **sala
 3. Revisa con `verificar_captura.py` (sección 6) y lleva los datos a la PC (sección 7).
 
 Criterios (fijados antes de la prueba): pérdida **< 1 %**, **0 huecos mayores de 5 s**, mediana de CSI/s en
-ventanas de 10 s **≥ 80,32/s**, **0 reinicios** de la placa y **Termux sin cierres** durante el bloque. Los tres
-primeros los evalúa `verificar_captura.py` desde `docs/ensayos/kit_movil_criterios.md`; los reinicios los informa
-(épocas y arranques de la telemetría) y el cierre de Termux se ve en que el receptor no terminó solo (falta
-`K001_local_resumen.json` o dura menos de 1800 s). Si algo falla, se registra **FALLIDO** y el diagnóstico
+ventanas de 10 s **≥ 80,32/s**, **0 reinicios** de la placa (ninguno por `ts_ms` y `encendido_s` nunca retrocede)
+y **Termux sin cierres** (existe `K001_local_resumen.json`, el receptor terminó por duración y hay un solo archivo
+de captura para la sesión). Los cinco los evalúa `verificar_captura.py` desde `docs/ensayos/kit_movil_criterios.md`.
+Si Termux se cierra, **no** relances la captura con otro código: se registra FALLIDO. Si algo falla, se registra **FALLIDO** y el diagnóstico
 (router o celular) se hace después, p. ej. con la sección 5.b.
 
 ### 5.b Diagnóstico opcional (NO forma parte de la prueba ni de sus criterios): recibir a la vez con la laptop

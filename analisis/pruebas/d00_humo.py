@@ -7,6 +7,9 @@ Criterio (los tres):
      atras, cubre >= 120 s, no aparece un segundo "arranque" ni lineas de panico/assert/reinicio, y el
      puerto no se reconecta;
   3. reporta memoria: al menos una telemetria con heap_libre y heap_minimo.
+Con --reiniciar (decision de Deisy, 26/10/2026): se ignora UNA sola linea "rst:0xc (SW_CPU)" que llegue en los
+primeros VENTANA_RST_PEDIDO_S segundos tras el AURA REBOOT pedido por consola; cualquier otro reinicio, panico o
+linea rst es FALLIDA. Sin --reiniciar el criterio no cambia.
 Observaciones (no cambian el resultado): pila minima libre por tarea y lineas "HMS:" sin cuerpo.
 
   python d00_humo.py --puerto COM5 --id-sesion D0_011 --version 0.1.1
@@ -30,6 +33,11 @@ from capturar import LectorSerie, nuevo_destino  # noqa: E402
 MIN_OBSERVADO_S = 120
 PANICO = re.compile(r"assert failed|Guru Meditation|abort\(\) was called|Backtrace:|Rebooting\.\.\.|"
                     r"rst:0x|stack overflow|Stack protection fault", re.IGNORECASE)
+# Reinicio pedido con AURA REBOOT: la ROM imprime esta linea ~0,33 s despues (F2, 26/10/2026; el firmware espera
+# 300 ms antes de esp_restart, aura_comandos.c:275). 5 s de margen.
+EVENTO_REBOOT_CONSOLA = "#AURA reinicio de la placa por consola (AURA REBOOT)"
+RST_PEDIDO = re.compile(r"rst:0xc \(SW_CPU\)")
+VENTANA_RST_PEDIDO_S = 5.0
 
 
 def capturar(puerto: str, id_sesion: str, segundos: float, reiniciar: bool) -> Path:
@@ -59,6 +67,8 @@ def analizar(archivo: Path, version: str | None) -> dict:
         r = csv.reader(f)
         next(r, None)
         t_reinicio = None
+        rst_pedido_pendiente = False     # se puede ignorar UNA linea rst del AURA REBOOT pedido
+        rst_ignorado = []
         for fila in r:
             if len(fila) < 2:
                 continue
@@ -66,6 +76,7 @@ def analizar(archivo: Path, version: str | None) -> dict:
             if linea.startswith("#AURA reinicio de la placa"):
                 # Reinicio pedido por la prueba: solo cuenta lo que llega despues (y la reconexion que provoca).
                 t_reinicio = float(fila[0])
+                rst_pedido_pendiente = linea.startswith(EVENTO_REBOOT_CONSOLA)
                 arranques, encendidos, telemetria, pilas, panico, eventos = [], [], [], [], [], []
                 hms_vacias = 0
                 continue
@@ -74,7 +85,12 @@ def analizar(archivo: Path, version: str | None) -> dict:
                     eventos.append(linea[6:])
                 continue
             if PANICO.search(linea):
-                panico.append(linea[:160])
+                if (rst_pedido_pendiente and RST_PEDIDO.search(linea)
+                        and float(fila[0]) - t_reinicio <= VENTANA_RST_PEDIDO_S):
+                    rst_pedido_pendiente = False
+                    rst_ignorado.append(linea[:160])
+                else:
+                    panico.append(linea[:160])
             if not linea.startswith("HMS:"):
                 continue
             cuerpo = linea[4:].strip()
@@ -106,7 +122,7 @@ def analizar(archivo: Path, version: str | None) -> dict:
         "motivo": (arranques[0].get("motivo_reinicio") if arranques else
                    (telemetria[0].get("motivo_reinicio") if telemetria else None)),
         "observado_s": observado, "encendido": (enc[0], enc[-1]) if enc else None, "monotono": monotono,
-        "panico": panico[:3], "eventos": eventos[:3], "hms_vacias": hms_vacias,
+        "panico": panico[:3], "rst_pedido_ignorado": rst_ignorado, "eventos": eventos[:3], "hms_vacias": hms_vacias,
         "heap_libre_ult": memoria[-1]["heap_libre"] if memoria else None,
         "heap_libre_min": min(t["heap_libre"] for t in memoria) if memoria else None,
         "heap_minimo": min(t["heap_minimo"] for t in memoria) if memoria else None,
@@ -148,6 +164,8 @@ def main() -> int:
         notas += "; falla: " + ", ".join(fallas)
     if r["panico"]:
         notas += "; panico: " + r["panico"][0]
+    if r["rst_pedido_ignorado"]:
+        notas += "; ignorada 1 linea rst del AURA REBOOT pedido (decision 26/10/2026)"
     if a.nota:
         notas += "; " + a.nota
     registrar("D0 humo (arranca, 2 min sin reinicio, reporta memoria)", valor,

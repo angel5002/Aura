@@ -130,5 +130,11 @@ Android. `.gitignore` ahora excluye `kit_captura/datos/` y `kit_movil/datos/`.
 - `kit_movil/` probado solo en la PC; la primera captura en el celular es su prueba.
 - La referencia de tasa (S002) se tomó con el router de casa; en AURA-LAB la tasa depende de la respuesta al ping del
   B315s (no verificado).
-- Fase 2 (cargar wifi1 = AURA-LAB en B): pendiente de la confirmación de Deisy.
+- Fase 2 hecha: B en AURA-LAB (192.168.8.102, confirmado en el panel). F2 FALLIDA por F2c (`sntp`=1 por hora
+  conservada; criterio mal planteado según Deisy). Causa del primer "sin confirmacion": SIN DETERMINAR.
+- Comprobar que tras desenchufar la placa `sntp` vuelve a 0 en AURA-LAB (Deisy, al llevarla al cuarto).
+- Actualizar `AURA_contexto.md` (no está en el repo): memoria mínima por intervalo de F1 = 23 016 B, por debajo de
+  los 26,4 KB citados; y la explicación de la hora tras reinicios por software.
+- Prueba del kit móvil: un bloque de 30 min, solo celular, sala vacía; criterios 1–5 en
+  `docs/ensayos/kit_movil_criterios.md`.
 - ADR-0022 (respaldo del repositorio) sigue pendiente; esta ADR toma el número 0023.

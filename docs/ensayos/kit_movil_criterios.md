@@ -13,8 +13,14 @@ Relacionados: ADR-0023 (Aceptada, 2026-10-26), `docs/red_aura.md`, `kit_movil/LE
 | 1 | Pérdida | **< 1 %** (estricto) | número de secuencia, mismo contador que `receptor_local.py` (épocas por reinicio) |
 | 2 | Huecos | **0 huecos mayores de 5 s** | tiempo entre dos datagramas `A1` consecutivos según `t_pc_unix`, del primero al último |
 | 3 | Tasa de CSI | **mediana de CSI/s en ventanas de 10 s ≥ 80 % de la de S002** | ventanas de 10 s completas desde el primer datagrama (`t_pc_unix`); la última, incompleta, no cuenta |
+| 4 | Reinicios de la placa | **0** | ningún reinicio detectado por `ts_ms` (receptor: `ts_ms` de una muestra retrocede) **y** `encendido_s` de la telemetría nunca retrocede; sin telemetría: NO EVALUADO |
+| 5 | Termux sin cierres | **sí** | existe `<código>_local_resumen.json`, el receptor terminó **por duración** (`"fin": "duracion"`, no `usuario` ni `error`) y hay **un solo** archivo de captura para la sesión (`<código>*_local.csv` en la misma carpeta) |
 
-Además se informa, sin criterio: `t_us` = 0 (placa sin SNTP), reinicios (por `ts_ms` y por secuencia) y, de la
+Protocolo de la prueba del kit (`kit_movil/LEEME.md`, 5.a): un solo bloque de 30 min (`--duracion 1800`), solo el
+celular como receptor, sala vacía y el mismo montaje.
+
+Además se informa, sin criterio: `t_us` = 0 (placa sin hora válida; tras un reinicio por software la placa puede
+conservar la hora anterior, F2), reinicios por secuencia (respaldo), la memoria mínima por intervalo y, de la
 telemetría de la placa, `motivo_reinicio` y `encendido_s`, para distinguir cortes de alimentación (`encendido`),
 caídas de tensión (`brownout`) y fallos de software (`panico`, `wdt*`).
 
@@ -26,6 +32,8 @@ hueco_max_s = 5.0
 ventana_tasa_s = 10.0
 tasa_csi_factor_min = 0.80
 tasa_csi_ref_s002 = 100.40
+reinicios_max = 0
+archivos_por_sesion = 1
 ```
 
 `tasa_csi_ref_s002` = mediana de CSI/s de `datos/crudos/S002_local.csv` (24/10/2026, placa B, receptor en la PC por
@@ -43,3 +51,5 @@ tasa depende de cuánto responde el B315s al ping de la placa (no verificado).
   proyecto (D4 y D7a-sim en `docs/plan_pruebas.md`; plan de casa en `docs/guia_salon.md`) y el ≤ 2 % no tenía
   justificación. La clave pasa a `perdida_menor_que_pct` para que la comparación estricta quede explícita.
 - 2026-10-26: tasa de CSI con umbral numérico (antes "~100/s", sin umbral), decidido por Deisy antes de la prueba.
+- 2026-10-26: criterios 4 (0 reinicios) y 5 (Termux sin cierres) con su definición, decididos por Deisy antes de la
+  prueba; `receptor_local.py` guarda en el resumen por qué terminó (`fin`) y la duración pedida.

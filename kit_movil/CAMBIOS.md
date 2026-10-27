@@ -2,6 +2,18 @@
 
 Android con Termux. La versión está en el archivo `VERSION`.
 
+## 0.1.3 — 26/10/2026 (antes de la prueba del kit)
+
+- Criterios 4 (0 reinicios) y 5 (Termux sin cierres) en `docs/ensayos/kit_movil_criterios.md` y en
+  `verificar_captura.py`, decididos por Deisy.
+- `receptor_local.py`: el resumen guarda `fin` (`duracion`, `usuario` o `error: ...`) y `duracion_pedida_s`; un
+  error de red detiene la captura y queda registrado en lugar de cerrar el programa sin resumen.
+- SHA-256 (primeros 16): `receptor_local.py` 44c76c18731038c3, `verificar_captura.py` a862a026880e4dfe,
+  `kit_movil_criterios.md` d589b664096a18b0; `aura_proto.py` sin cambios (b5902c0d5e39baff).
+- Probado solo en la PC con la placa simulada: ejecución normal (criterio 5 APROBADO; criterio 4 FALLIDO por el
+  reinicio simulado), receptor cerrado a la fuerza (5 FALLIDO, sin resumen) y dos archivos en la misma sesión (5
+  FALLIDO). Datos sintéticos: solo demuestran que el código corre. **Sigue sin verificar en un celular.**
+
 ## 0.1.2 — 26/10/2026 (antes de la prueba del kit)
 
 - `LEEME.md`: la prueba del kit es **un solo bloque de 30 min**, solo con el celular, sala vacía y el montaje de

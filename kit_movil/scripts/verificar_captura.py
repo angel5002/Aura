@@ -5,7 +5,10 @@ Los umbrales NO estan en este script: se leen del bloque ```criterios de docs/en
 se suscribe a una sola IP):
   1. perdida < perdida_menor_que_pct (estricto), por numero de secuencia (mismo contador que receptor_local.py);
   2. 0 huecos mayores de hueco_max_s: tiempo entre dos datagramas A1 consecutivos segun t_pc_unix;
-  3. mediana de CSI/s en ventanas completas de ventana_tasa_s >= tasa_csi_factor_min x tasa_csi_ref_s002.
+  3. mediana de CSI/s en ventanas completas de ventana_tasa_s >= tasa_csi_factor_min x tasa_csi_ref_s002;
+  4. reinicios <= reinicios_max: por ts_ms (receptor) y retrocesos de encendido_s (telemetria);
+  5. Termux sin cierres: existe <id>_local_resumen.json, "fin" = "duracion" y hay archivos_por_sesion archivo(s)
+     <id>*_local.csv en la carpeta.
 Informa ademas (sin criterio): t_us = 0 (placa sin hora valida), reinicios (por ts_ms y por secuencia) y, de los
 mensajes 'telemetria', motivo_reinicio y encendido_s por arranque (encendido = alimentacion, brownout = caida de
 tension, panico/wdt = fallo de software) y la memoria minima por intervalo de 10 s (heap_min_intervalo). Solo lee: no cambia nada ni registra en docs/resultados_pruebas.md.
@@ -28,7 +31,9 @@ from receptor_local import ContadorSecuencia, ts_muestra
 
 RAIZ = Path(__file__).resolve().parent.parent
 CRITERIOS = RAIZ / "docs" / "ensayos" / "kit_movil_criterios.md"
-CLAVES = ("perdida_menor_que_pct", "hueco_max_s", "ventana_tasa_s", "tasa_csi_factor_min", "tasa_csi_ref_s002")
+CLAVES = ("perdida_menor_que_pct", "hueco_max_s", "ventana_tasa_s", "tasa_csi_factor_min", "tasa_csi_ref_s002",
+          "reinicios_max", "archivos_por_sesion")
+SUFIJO = "_local.csv"
 
 
 def leer_criterios(ruta: Path) -> dict:
@@ -66,6 +71,8 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
     huecos = []                 # (t_pc_unix al empezar el hueco, duracion s)
     t_csi = []
     arranques = []              # por arranque segun la telemetria: dict motivo, enc_ini, enc_fin, t_ini, t_fin, n
+    retrocesos_enc = 0          # veces que encendido_s retrocede (reinicio visto por la telemetria)
+    n_tel = 0
     t_ini = t_fin = None
     with open(ruta, newline="", encoding="utf-8") as f:
         r = csv.reader(f)
@@ -92,6 +99,8 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
                 if tel is not None and isinstance(tel.get("encendido_s"), (int, float)):
                     enc, motivo = tel["encendido_s"], tel.get("motivo_reinicio", "?")
                     a = arranques[-1] if arranques else None
+                    n_tel += 1
+                    retrocesos_enc += a is not None and enc < a["enc_fin"]
                     if a is None or enc < a["enc_fin"] or motivo != a["motivo"]:
                         a = {"motivo": motivo, "enc_ini": enc, "enc_fin": enc, "t_ini": t, "t_fin": t, "n": 1,
                              "heap_int": []}
@@ -160,7 +169,53 @@ def revisar(ruta: Path, crit: dict) -> bool | None:
             ok = ok and ok3
             print(f"  [{'APROBADO' if ok3 else 'FALLIDO'}] 3. mediana de CSI/s en {n_vent} ventanas de {v:g} s: "
                   f"{mediana:.2f}/s (criterio >= {crit['tasa_csi_factor_min']:g} x {ref:g} = {minimo:.2f}/s)")
+
+    rmax = crit["reinicios_max"]
+    if n_tel == 0:
+        print(f"  [NO EVALUADO] 4. reinicios: por ts_ms {res['reinicios_por_ts']}, pero no hay telemetria para ver "
+              f"encendido_s")
+        pend = True
+    else:
+        ok4 = res["reinicios_por_ts"] <= rmax and retrocesos_enc <= rmax
+        ok = ok and ok4
+        print(f"  [{'APROBADO' if ok4 else 'FALLIDO'}] 4. reinicios: por ts_ms {res['reinicios_por_ts']}, retrocesos "
+              f"de encendido_s {retrocesos_enc} en {n_tel} telemetrias (criterio <= {rmax:g} en ambos)")
+
+    r5 = termux_sin_cierres(ruta, crit)
+    if r5 is None:
+        pend = True
+    else:
+        ok = ok and r5
     return None if (ok and pend) else ok
+
+
+def termux_sin_cierres(ruta: Path, crit: dict) -> bool | None:
+    """Criterio 5. None si no se puede evaluar (nombre sin _local.csv o resumen de una version anterior)."""
+    if not ruta.name.endswith(SUFIJO):
+        print(f"  [NO EVALUADO] 5. Termux sin cierres: el nombre no termina en {SUFIJO}")
+        return None
+    sesion = ruta.name[: -len(SUFIJO)]
+    resumen = ruta.with_name(f"{sesion}_local_resumen.json")
+    archivos = sorted(p.name for p in ruta.parent.glob(f"{sesion}*{SUFIJO}"))
+    ok_arch = len(archivos) == int(crit["archivos_por_sesion"])
+    if not resumen.exists():
+        print(f"  [FALLIDO] 5. Termux sin cierres: no existe {resumen.name} (el receptor no termino normalmente); "
+              f"archivos de captura: {archivos}")
+        return False
+    try:
+        fin = json.loads(resumen.read_text(encoding="utf-8")).get("fin")
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"  [FALLIDO] 5. Termux sin cierres: {resumen.name} ilegible ({e})")
+        return False
+    if fin is None:
+        print(f"  [NO EVALUADO] 5. Termux sin cierres: {resumen.name} no tiene 'fin' (receptor anterior al "
+              f"26/10/2026); archivos de captura: {len(archivos)}")
+        return None
+    ok5 = fin == "duracion" and ok_arch
+    print(f"  [{'APROBADO' if ok5 else 'FALLIDO'}] 5. Termux sin cierres: fin={fin!r}, archivos de captura "
+          f"{len(archivos)} {archivos if not ok_arch else ''}(criterio: fin='duracion' y "
+          f"{int(crit['archivos_por_sesion'])} archivo)")
+    return ok5
 
 
 def main() -> int:

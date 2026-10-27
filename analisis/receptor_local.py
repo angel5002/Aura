@@ -206,6 +206,7 @@ def recibir(ip: str, puerto: int, destino: Path, duracion: float, nombre: str = 
     prox_sub = 0.0
     prox_info = t_inicio + informar_cada
     ultimo_dato = None
+    fin = "duracion"            # por que termino: duracion | usuario (Ctrl+C) | error: ... (lo usa verificar_captura)
     with open(destino, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["t_pc_unix", "linea"])
@@ -246,7 +247,11 @@ def recibir(ip: str, puerto: int, destino: Path, duracion: float, nombre: str = 
                           f"({r['perdidos']}/{r['esperados']}) | desorden {r['desordenados']} | dup {r['duplicados']}")
                     prox_info += informar_cada
         except KeyboardInterrupt:
+            fin = "usuario"
             print("\nDetenido por el usuario.")
+        except OSError as e:
+            fin = f"error: {type(e).__name__}: {e}"
+            print(f"\nERROR de red, se detiene la captura: {e}")
         finally:
             try:
                 sock.sendto(b"UNSUB", (ip, puerto))
@@ -256,7 +261,8 @@ def recibir(ip: str, puerto: int, destino: Path, duracion: float, nombre: str = 
     dur = time.time() - t_inicio
     resumen = cont.resumen(final=True)
     resumen.update({
-        "archivo": str(destino), "duracion_s": dur, "por_tipo": dict(por_tipo), "otros": otros,
+        "archivo": str(destino), "duracion_s": dur, "duracion_pedida_s": duracion, "fin": fin,
+        "por_tipo": dict(por_tipo), "otros": otros,
         "tasa_total_por_s": sum(por_tipo.values()) / dur if dur else 0, "ip": ip,
         "segundos_sin_datos_al_final": (time.time() - ultimo_dato) if ultimo_dato else None,
     })
@@ -292,7 +298,7 @@ def main() -> int:
     r = recibir(ip, args.puerto, destino, args.duracion, bind_explicito=not args.sin_bind)
     (DIR_CRUDOS / f"{args.id_sesion}_local_resumen.json").write_text(json.dumps(r, indent=2), encoding="utf-8")
     print("\n--- Resumen ---")
-    for k in ("duracion_s", "por_tipo", "tasa_total_por_s", "esperados", "recibidos_unicos", "perdidos",
+    for k in ("fin", "duracion_s", "por_tipo", "tasa_total_por_s", "esperados", "recibidos_unicos", "perdidos",
               "perdida_pct", "desordenados", "duplicados", "epocas",
               "reinicios_por_ts", "reinicios_por_secuencia"):
         print(f"{k:>18}: {r[k]}")
