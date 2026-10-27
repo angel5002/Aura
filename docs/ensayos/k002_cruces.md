@@ -18,11 +18,13 @@ Firmware: el que tenga la placa al ejecutarla (hoy 0.1.3, **sin** filtro de dest
 
 | t (s) | Acción |
 |---|---|
-| 0 – 30 | Quieta, de pie, a ≥ 1 m de la línea Huawei–B (siempre en el mismo sitio) |
-| **30, 55, 80, 105, 130, 155, 180, 205, 230, 255** | **Cruce:** caminar a paso normal atravesando la línea Huawei–B (2–3 s) y volver a quedarse quieta en el otro lado, a ≥ 1 m de la línea |
-| 255 – 300 | Quieta hasta el final |
+| 0 – 30 | De pie y **quieta** en el **punto marcado 1**, a **más de 1,5 m** de la línea Huawei–B |
+| **30, 55, 80, 105, 130, 155, 180, 205, 230, 255** | **Cruce:** caminar a paso normal atravesando la línea Huawei–B hasta el punto marcado del otro lado (≈ 3–4 s) y quedarse de pie, **quieta**, en ese punto hasta el siguiente cruce |
+| 255 – 300 | De pie y quieta en el punto marcado hasta el final |
 
-Los cruces alternan de lado (ida y vuelta). La captura dura 330 s para tener margen:
+Antes de empezar se marcan en el suelo **dos puntos**, uno a cada lado de la línea Huawei–B, cada uno a **más de 1,5 m**
+de ella (cinta adhesiva); los cruces van de un punto al otro y alternan de lado (ida y vuelta). Entre cruces la
+persona espera **de pie, quieta**, sobre el punto. La captura dura 330 s para tener margen:
 
 ```
 bash ~/kit_movil/scripts/capturar.sh K002 <IP_DE_LA_PLACA> 330
@@ -46,11 +48,15 @@ tolerancia.
 - **Validez:** captura ≥ 290 s, 0 huecos > 5 s y 0 reinicios de la placa. Si no: NO EJECUTADA (se repite).
 - **Detección:** **≥ 8 de 10 cruces** con algún `motion_status = true` en **[t_k − 3 s, t_k + 8 s]**.
   - −3 s: diferencia entre el Enter, el cronómetro y el primer datagrama, más imprecisión humana.
-  - +8 s: el cruce dura 2–3 s y la latencia observada antes fue < 1 s (0,83 s en S002, plan anulado); queda margen.
-- **Falsas alarmas:** **≤ 5 %** del tiempo en MOVIMIENTO en las ventanas tranquilas: [5, 27] s, [t_k + 10, t_k+1 − 3] s
-  entre cruces (12 s cada una) y [265, 290] s (155 s en total). Referencia: S002 con la sala vacía, 0,25 %.
-- Resultado: APROBADA si se cumplen detección y falsas alarmas; FALLIDA si no (con la persona quieta en el cuarto, una
-  falsa alarma alta también indica que el detector confunde presencia quieta con movimiento).
+  - +8 s: el cruce dura ≈ 3–4 s y la latencia observada antes fue < 1 s (0,83 s en S002, plan anulado); queda margen.
+- **Persona quieta fuera del enlace:** **≤ 5 %** del tiempo en MOVIMIENTO (umbral de prototipo) en las ventanas
+  tranquilas: [5, 27] s, [t_k + 10, t_k+1 − 3] s entre cruces (12 s cada una) y [265, 290] s, **155 s en total**. No se
+  compara con S002 (allí la sala estaba vacía; aquí hay una persona quieta en el cuarto).
+  - `motion_status` es el estado del detector de esp_wifi_sensing (`web_serial_monitor.c:288`), **sin** la retención
+    de 10 s del estado MOVIMIENTO de AURA (`aura_sensing.c:281`); solo mantiene ACTIVO 300 ms
+    (`ESP_WIFI_SENSING_ACTIVE_FILTER_MS`, `sdkconfig.usado:2453`) más la confirmación de salida (< 1 s en total,
+    inferido). Empezar las ventanas 10 s después de cada cruce lo cubre con margen, incluido el paso hasta el punto.
+- Resultado: APROBADA si se cumplen detección y persona quieta fuera del enlace; FALLIDA si no.
 
 Se informa además (sin criterio): latencia del primer positivo de cada cruce y cruces detectados uno por uno.
 

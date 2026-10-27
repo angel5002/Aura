@@ -4,11 +4,11 @@ Lee la captura del celular (<id>_local.csv, ya pasada a datos/crudos) y evalua e
 motion_status de las muestras, sin la retencion de 10 s del estado de la placa) contra el horario de cruces fijado
 antes. t = 0 es el primer datagrama de la captura (t_pc_unix del celular).
 
-Horario: 10 cruces en t = 30, 55, 80, ..., 255 s (cada 25 s); antes, entre y despues, la persona quieta fuera del
-enlace. Criterios (PROPUESTOS el 27/10/2026; se aplican solo si Deisy los aprueba antes de ejecutar):
+Horario: 10 cruces en t = 30, 55, 80, ..., 255 s (cada 25 s); antes, entre y despues, la persona de pie y quieta en
+un punto marcado a mas de 1,5 m de la linea Huawei-B. Criterios (PROPUESTOS el 27/10/2026; se aplican solo si Deisy los aprueba antes de ejecutar):
   validez:   captura >= 290 s, 0 huecos > 5 s, sin reinicios de la placa (si no: NO EJECUTADA);
   deteccion: >= 8 de 10 cruces con algun motion_status = true en [t_k - 3 s, t_k + 8 s];
-  falsas:    tiempo en MOVIMIENTO <= 5 % en las ventanas tranquilas ([5, 27] s, [t_k + 10, t_k+1 - 3] s y
+  persona quieta fuera del enlace: tiempo en MOVIMIENTO <= 5 % (umbral de prototipo) en las ventanas tranquilas ([5, 27] s, [t_k + 10, t_k+1 - 3] s y
              [265, 290] s).
 
   python pruebas\\k002_cruces.py C:\\aura\\datos\\crudos\\K002_local.csv
@@ -93,14 +93,14 @@ def main() -> int:
         m, t = pct_movimiento(muestras, *v)
         mov, tot = mov + m, tot + t
     falsas = 100 * mov / tot if tot else float("nan")
-    print(f"  ventanas tranquilas: {tot:.1f} s cubiertos, {falsas:.2f} % en MOVIMIENTO")
+    print(f"  persona quieta fuera del enlace (ventanas tranquilas): {tot:.1f} s cubiertos, {falsas:.2f} % en MOVIMIENTO")
     valido = dur >= MIN_DURACION_S and huecos == 0 and reinicios == 0
     ok_det, ok_fal = detectados >= MIN_DETECTADOS, falsas <= MAX_FALSAS_PCT
     estado = "NO EJECUTADA" if not valido else ("APROBADA" if ok_det and ok_fal else "FALLIDA")
     lat = (f"; latencia mediana {sorted(latencias)[len(latencias) // 2]:+.1f} s" if latencias else "")
-    valor = f"{detectados}/10 cruces detectados; {falsas:.2f} % en MOVIMIENTO en ventanas tranquilas" + lat
+    valor = f"{detectados}/10 cruces detectados; {falsas:.2f} % en MOVIMIENTO con la persona quieta fuera del enlace" + lat
     criterio = (f">= {MIN_DETECTADOS}/10 detectados en [-{ANTES_S:g}, +{DESPUES_S:g}] s y <= {MAX_FALSAS_PCT:g} % "
-                f"en MOVIMIENTO en ventanas tranquilas")
+                f"en MOVIMIENTO con la persona quieta fuera del enlace")
     notas = f"{a.archivo.name}; {dur:.0f} s; huecos {huecos}; reinicios {reinicios}"
     if not valido:
         notas += f"; invalida (requiere >= {MIN_DURACION_S:g} s, 0 huecos y 0 reinicios)"
