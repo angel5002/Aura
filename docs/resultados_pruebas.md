@@ -79,3 +79,11 @@ Cada ejecucion agrega una fila; no se editan filas anteriores.
 | 2026-10-26 15:04 | D11d ganancias por paquete | 62045/62045 con agc, fft y comp | 100 % | **APROBADA** |  |
 | 2026-10-26 15:04 | D11e orden Re/Im (informativo) | rugosidad de amplitud emparejando desde 0: 0.197, desde 1: 0.215 | no verificable con una sola placa; IDF documenta (Im, Re) | **NO EJECUTADA** | el orden Im/Re no se puede distinguir sin referencia externa; la amplitud no depende de el |
 | 2026-10-26 15:04 | D11f ancho de valor y subportadoras | 100.00 % de los bytes altos de cada palabra en 0x00-0x0F -> 12 bits en palabras de 16; valid = 52 valores = 26 subportadoras complejas (Im, Re) | >= 99 % de bytes altos en 0x00-0x0F y valid = 52 valores (criterio definido a posteriori el 26/10/2026, tras observar el resultado del 24/10) | **APROBADA** | lltf_bit_mode por defecto = 12 bits (esp_wifi_he_types.h); esp-radar y csi_recv_router leen 16 bits con extension de 12 |
+| 2026-10-26 21:21 | T4a perdida informada | 65.314 % (real 1.0 %: 50 de 5000) | entre 0,8 % y 1,2 % | **FALLIDA** |  |
+| 2026-10-26 21:21 | T4b desorden y duplicados | desordenados 100 (intercambios 99), duplicados 1 de 10, unicos 4959 | desorden detectado; duplicados no cuentan como recibidos | **FALLIDA** |  |
+| 2026-10-26 21:21 | T4c todo guardado | 4960 filas de 4960 datagramas enviados | filas = datagramas que llegaron | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_local.csv |
+| 2026-10-26 21:21 | T4d reproduccion | 20 cuadros PNG reconstruidos | >= 5 cuadros desde el archivo | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_cuadros |
+| 2026-10-26 21:23 | T4a perdida informada | 1.000 % (real 1.0 %: 50 de 5000) | entre 0,8 % y 1,2 % | **APROBADA** |  |
+| 2026-10-26 21:23 | T4b desorden y duplicados | desordenados 99 (intercambios 99), duplicados 10 de 10, unicos 4950 | desorden detectado; duplicados no cuentan como recibidos | **APROBADA** |  |
+| 2026-10-26 21:23 | T4c todo guardado | 4960 filas de 4960 datagramas enviados | filas = datagramas que llegaron | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_local.csv |
+| 2026-10-26 21:23 | T4d reproduccion | 20 cuadros PNG reconstruidos | >= 5 cuadros desde el archivo | **APROBADA** | C:\aura\analisis\pruebas\salida\T4_cuadros |

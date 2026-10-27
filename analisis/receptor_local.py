@@ -4,7 +4,9 @@
 - Suscripcion: "SUB <nombre>" cada 10 s (la placa da 30 s de concesion).
 - Graba cada datagrama en C:\\aura\\datos\\crudos\\<id>_local.csv (t_pc_unix, linea), mismo formato que capturar.py.
 - Mide perdidas con el numero de secuencia: maneja desorden y duplicados; si la placa se reinicia
-  (la secuencia vuelve a empezar) abre una "epoca" nueva y suma las perdidas de cada una.
+  (la secuencia cae mas que VENTANA_DESORDEN, de forma sostenida) abre una "epoca" nueva y suma las perdidas de cada
+  una. LIMITE: un reinicio ocurrido antes de que la placa llegue a ~1000 datagramas desde su arranque anterior no se
+  detecta (p. ej., reinicios en bucle): se cuenta como duplicados y el resumen de perdida sale mal. El CSV no cambia.
 - Informa cada 5 s la tasa por tipo y el porcentaje de perdida; al final guarda <id>_local_resumen.json.
 - Puede alimentar el panel en vivo (visor.py) mediante la funcion 'al_recibir'.
 
@@ -26,21 +28,57 @@ from aura_proto import PUERTO_ANUNCIO, PUERTO_DATOS, parsear_anuncio, parsear_da
 RAIZ = Path(__file__).resolve().parent.parent
 DIR_CRUDOS = RAIZ / "datos" / "crudos"
 
+# Reinicio de la placa = la secuencia cae mas que esta ventana respecto al maximo visto, de forma sostenida.
+# Desorden medido el 26/10/2026 en F1, S002 y PV (110 376 datagramas, receptor en la PC): 0. 1000 datagramas son
+# ~8,5 s a la tasa de S002 (117,6/s) y ~15 lotes del firmware (hasta 64 por vuelta, aura_local.c:353).
+VENTANA_DESORDEN = 1000
+# Un duplicado viejo tambien "cae" mas que la ventana, pero llega aislado; tras un reinicio llega una secuencia
+# nueva sostenida (1, 2, 3...). Se confirma el reinicio con CONFIRMAR_REINICIO datagramas seguidos por debajo de
+# la ventana y agrupados en un rango menor que ella (~0,17 s a 117,6/s).
+# LIMITE (~1000 datagramas): el reinicio solo se ve si la secuencia anterior pasaba de VENTANA_DESORDEN +
+# CONFIRMAR_REINICIO (1020). La secuencia de la placa cuenta desde su arranque y solo avanza con receptor suscrito
+# (aura_local.c:166-169): un reinicio antes de ~1000 datagramas (~8,5 s a la tasa de S002), p. ej. reinicios en
+# bucle, no se detecta y se cuenta como duplicados. Afecta solo al resumen, no al CSV. Para estos casos sirve la
+# telemetria de la placa (encendido_s, motivo de reinicio).
+# No hay rezagados de la epoca anterior: entre el ultimo datagrama y el primero tras el reinicio pasan segundos.
+CONFIRMAR_REINICIO = 20
+
 
 class ContadorSecuencia:
     """Cuenta recibidos, perdidos, desordenados y duplicados a partir de numeros de secuencia."""
 
-    def __init__(self, ventana_dup: int = 100000):
+    def __init__(self, ventana_dup: int = 100000, ventana_desorden: int = VENTANA_DESORDEN,
+                 confirmar_reinicio: int = CONFIRMAR_REINICIO):
         self.epocas = []          # (min, max, unicos) de epocas cerradas
         self.min = self.max = None
         self.vistos = set()
         self.desordenados = 0
         self.duplicados = 0
         self.ventana_dup = ventana_dup
+        self.ventana_desorden = ventana_desorden
+        self.confirmar_reinicio = confirmar_reinicio
+        self.candidatos = []      # caidas mayores que la ventana aun sin clasificar (reinicio o duplicados viejos)
 
     def agregar(self, seq: int):
-        if self.max is not None and seq < self.max - 1_000_000:
-            self._cerrar_epoca()          # la placa se reinicio
+        if self.max is not None and seq < self.max - self.ventana_desorden:
+            self.candidatos.append(seq)
+            if len(self.candidatos) >= self.confirmar_reinicio and \
+                    max(self.candidatos) - min(self.candidatos) < self.ventana_desorden:
+                pendientes, self.candidatos = self.candidatos, []
+                self._cerrar_epoca()      # la placa se reinicio
+                for s in pendientes:
+                    self._contar(s)
+            return
+        self._vaciar_candidatos()
+        self._contar(seq)
+
+    def _vaciar_candidatos(self):
+        """Las caidas no confirmadas como reinicio se cuentan en la epoca actual (duplicados o desorden)."""
+        pendientes, self.candidatos = self.candidatos, []
+        for s in pendientes:
+            self._contar(s)
+
+    def _contar(self, seq: int):
         if seq in self.vistos:
             self.duplicados += 1
             return
@@ -65,7 +103,10 @@ class ContadorSecuencia:
         self.vistos = set()
         self._unicos_podados = 0
 
-    def resumen(self) -> dict:
+    def resumen(self, final: bool = False) -> dict:
+        """final=True: al terminar, las caidas aun sin clasificar se cuentan en la epoca actual."""
+        if final:
+            self._vaciar_candidatos()
         epocas = list(self.epocas)
         if self.min is not None:
             epocas.append((self.min, self.max, len(self.vistos) + getattr(self, "_unicos_podados", 0)))
@@ -166,7 +207,7 @@ def recibir(ip: str, puerto: int, destino: Path, duracion: float, nombre: str = 
                 pass
             sock.close()
     dur = time.time() - t_inicio
-    resumen = cont.resumen()
+    resumen = cont.resumen(final=True)
     resumen.update({
         "archivo": str(destino), "duracion_s": dur, "por_tipo": dict(por_tipo), "otros": otros,
         "tasa_total_por_s": sum(por_tipo.values()) / dur if dur else 0, "ip": ip,

@@ -72,9 +72,16 @@ La configuración del router se documenta en `docs/red_aura.md`, sin contraseña
   contraseña WPA2 es la única barrera; por eso **la clave WiFi de AURA-LAB no se comparte con alumnos ni con el
   público** (ver `docs/red_aura.md`, sección de seguridad). Además, un intruso puede ocupar uno de los 3 cupos de
   suscriptor (`firmware/versiones/0.1.3/sdkconfig.usado:731`).
-- Observación ajena a esta decisión: `receptor_local.py` solo detecta el reinicio de la placa si la secuencia cae más
-  de 1 000 000 (`analisis/receptor_local.py:42`); un reinicio a mitad de una sesión corta se contaría como duplicados
-  y desorden, no como época nueva. Afecta solo al porcentaje de pérdida, no al CSV ni al visor.
+- Consecuencia en el visor (2026-10-26, pedida por Deisy): `visor.py --reproducir` usa **por defecto `t_pc_unix`
+  para cualquier archivo** (no depende del nombre, del entorno ni de un cambio de formato). `--hora-placa` usa `t_us`
+  solo si todo `t_us` > 0, no decrece en el orden del archivo y `t_pc_unix − t_us` no se aleja más de 1 s de su
+  mediana (en S002 la mayor desviación fue 0,136 s); si no, avisa y usa `t_pc_unix`. Al empezar imprime la
+  referencia usada y por qué. Comprobado con S002: con `--hora-placa`, 61/61 cuadros idénticos byte a byte al visor
+  anterior; por defecto, los mismos 6 183 cuadros y los mismos 22 cambios de estado, desplazados −1,14 s (medido).
+  Las ventanas `--desde`/`--hasta` y los nombres de los PNG quedan en la hora del receptor.
+- Observación ajena a esta decisión, corregida el 2026-10-26 (bitácora): `receptor_local.py` solo detectaba el
+  reinicio de la placa si la secuencia caía más de 1 000 000; ahora usa una ventana de desorden de 1000 datagramas
+  con confirmación sostenida (20 datagramas). Afecta solo al resumen de pérdida, no al CSV ni al visor.
 - Obliga a: completar `docs/red_aura.md` con lo que dicte Deisy; prueba en la red con el celular (criterio de
   `docs/guia_salon.md:95`: `csi ~100/s`, pérdida < 1 %); en otra fase, cargar wifi1 = AURA-LAB en la NVS (sin
   grabar firmware).

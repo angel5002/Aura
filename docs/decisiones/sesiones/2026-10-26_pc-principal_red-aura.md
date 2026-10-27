@@ -54,16 +54,40 @@ Preparar la captura sin PC: router Huawei B315s-519, red `AURA-LAB` (2,4 GHz, si
 - El broadcast de anuncios puede no llegar a Android con la pantalla apagada (inferido): usar `--ip` y `--sin-bind`
   con la IP reservada de la placa.
 
+## Segunda parte (después del commit f6dd354)
+
+**Reinicios en `receptor_local.py`.** Desorden medido en el orden de llegada (F1, S002, PV; 110 376 datagramas,
+receptor en la PC): **0** llegadas por debajo del máximo ya visto. Propuesta aplicada: `VENTANA_DESORDEN = 1000`
+(≈ 8,5 s a 117,6 datagramas/s; ≈ 15 lotes de 64 del firmware). Primera versión (caída > 1000 = reinicio): T4a y T4b
+**FALLIDAS**: el simulador de T4 manda al final 10 duplicados de toda la sesión, que "caen" más de 1000. No se cambió
+la prueba; se exige además confirmación sostenida (`CONFIRMAR_REINICIO = 20` datagramas seguidos por debajo de la
+ventana y dentro de un rango < 1000). Resultados: prueba sintética 8/8 (solo demuestra que el código corre); T4a–d
+APROBADAS; resumen de F1, S002 y PV idéntico al de la versión anterior (medido). Límite: un reinicio antes de ~1000
+datagramas no se detecta.
+
+**`visor.py --reproducir`.** Por decisión de Deisy, `t_pc_unix` por defecto para cualquier archivo; `--hora-placa`
+con validación (todo `t_us` > 0, no decreciente, |desfase − mediana| ≤ 1 s) y aviso si se rechaza. S002 (medido):
+con `--hora-placa`, 61/61 PNG idénticos byte a byte al visor anterior en 30 s; por defecto, 6 183 cuadros como antes y
+la misma secuencia de 22 cambios de estado, desplazada −1,14 s (mediana; −1,140 a −1,040). Conteo de cuadros por
+estado: MOVIMIENTO 10 frente a 9 y SIN_MOVIMIENTO 6 147 frente a 6 148, por el redondeo a la rejilla de 0,1 s.
+Rechazo comprobado en 4 variantes de S002 (mezcla de 0 y > 0, todo 0, retroceso, salto de 5 s).
+
+Copias temporales de S002 creadas para estas pruebas: borradas.
+
 ## Pruebas
-- Ninguna prueba del plan (T/D) ejecutada. Medición informativa con S002, sin criterio de aceptación.
+- T4 (receptor simulado): primera ejecución con el cambio: T4a, T4b **FALLIDAS**, T4c, T4d APROBADAS; tras la
+  corrección: T4a–d **APROBADAS** (`docs/resultados_pruebas.md`).
+- Mediciones informativas con S002, sin criterio de aceptación.
 
 ## ADR creados o modificados
-- Nuevo: ADR-0023 (Propuesta).
+- Nuevo: ADR-0023 (Propuesta); ampliada en la segunda parte (consecuencias de seguridad, reinicio y visor).
 
 ## Pendientes y riesgos
 - Deisy dicta la configuración del router (IP, DHCP, canal, modo, seguridad, aislamiento, reservas) para completar
   `docs/red_aura.md`.
 - Prueba con el celular en AURA-LAB (criterio de `docs/guia_salon.md:95`).
-- Observación: `receptor_local.py:42` solo abre una época nueva si la secuencia cae más de 1 000 000; un reinicio de
-  la placa en una sesión corta queda como duplicados y desorden en el resumen de pérdida.
+- `kit_captura/scripts/receptor_local.py` y `visor.py` siguen con la versión anterior: actualizarlos implica una
+  versión nueva del kit (ADR-0013, `kit_captura/CAMBIOS.md`). El celular debe copiar `receptor_local.py` desde
+  `analisis/`.
+- Los cambios de `receptor_local.py` y `visor.py` no tienen commit todavía.
 - ADR-0022 (respaldo del repositorio) sigue pendiente; esta ADR toma el número 0023.

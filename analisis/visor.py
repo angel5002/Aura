@@ -10,7 +10,9 @@ Modos:
                 cuenta de usuario (nunca la clave de servicio) cada 5 s.
   Reproduccion: python visor.py --reproducir C:\\aura\\datos\\crudos\\L001_local.csv [--exportar DIR --fps 10]
                 Reconstruye el panel desde el archivo; con --exportar escribe un PNG por cuadro, con la
-                hora UNIX (ms, SNTP de la placa) en el nombre y en la imagen, para alinearlo con el video.
+                hora UNIX (ms) en el nombre y en la imagen, para alinearlo con el video. La hora es t_pc_unix
+                (reloj del receptor) para cualquier archivo; --hora-placa usa t_us (SNTP de la placa) solo si
+                es coherente en todo el archivo (ADR-0023).
                 Tambien acepta una captura USB de capturar.py (lineas "HMS:"): usa la hora de la PC que
                 capturo y muestra la señal del detector y el estado (por USB no llega el CSI crudo).
 """
@@ -56,8 +58,10 @@ class Estado:
         self.pres_valida = False
         self.lock = threading.Lock()
 
-    def agregar_datagrama(self, t_pc: float, d):
-        t = d.t_us / 1e6 if d.t_us else t_pc
+    def agregar_datagrama(self, t_pc: float, d, t: float | None = None):
+        """t: hora ya elegida por quien llama (reproduccion); si no, t_us de la placa o, sin SNTP, t_pc."""
+        if t is None:
+            t = d.t_us / 1e6 if d.t_us else t_pc
         try:
             cuerpo = json.loads(d.cuerpo)
         except json.JSONDecodeError:
@@ -177,10 +181,35 @@ class LineaUSB:
 
 ROTULO_REPRODUCCION = "Reproducción de datos registrados durante la grabación"
 
+# --hora-placa: limite sobre la VARIACION del desfase, no sobre el desfase absoluto. Desfase = t_pc_unix - t_us
+# (el signo no importa: se mide |desfase - mediana del desfase|). Un desfase constante de cualquier valor se acepta;
+# se rechaza si en algun datagrama se aleja de su mediana mas que esto. En S002 (26/10/2026) el desfase fue -1,127 s
+# y la mayor desviacion 0,136 s; 1 s solo lo supera un salto del reloj.
+SALTO_RELOJ_S = 1.0
+
+
+def validar_hora_placa(filas: list) -> str | None:
+    """None si t_us sirve como referencia (todo > 0, no decreciente en el orden del archivo y sin saltos respecto
+    a t_pc_unix); si no, el motivo."""
+    t_us = np.array([d.t_us for _, d in filas], dtype=np.int64)
+    if (t_us <= 0).any():
+        n0 = int((t_us <= 0).sum())
+        return (f"{n0} de {len(t_us)} datagramas con t_us = 0 (placa sin hora SNTP)"
+                + (", mezclados con t_us > 0" if n0 < len(t_us) else ""))
+    atras = int((np.diff(t_us) < 0).sum())
+    if atras:
+        return f"t_us retrocede {atras} {'vez' if atras == 1 else 'veces'} en el orden del archivo"
+    desfase = np.array([t_pc for t_pc, _ in filas]) - t_us / 1e6
+    desv = float(np.abs(desfase - np.median(desfase)).max())      # variacion del desfase, no su valor absoluto
+    if desv > SALTO_RELOJ_S:
+        return (f"salto del reloj: el desfase t_pc_unix - t_us (mediana {np.median(desfase):.3f} s) varia hasta "
+                f"{desv:.3f} s respecto a su mediana (limite de variacion {SALTO_RELOJ_S} s)")
+    return None
+
 
 def reproducir(archivo: Path, exportar: Path | None, fps: float, desde: float | None, hasta: float | None,
-               rotulo: str | None = ROTULO_REPRODUCCION) -> int:
-    filas = []
+               rotulo: str | None = ROTULO_REPRODUCCION, hora_placa: bool = False) -> int:
+    filas = []                                      # (t_pc_unix, datagrama), en el orden del archivo
     with open(archivo, newline="", encoding="utf-8") as f:
         r = csv.reader(f)
         next(r)
@@ -193,11 +222,26 @@ def reproducir(archivo: Path, exportar: Path | None, fps: float, desde: float | 
             else:
                 d = parsear_datagrama(linea)
             if d:
-                filas.append((d.t_us / 1e6 if d.t_us else float(t_pc), float(t_pc), d))
+                filas.append((float(t_pc), d))
     if not filas:
         print("ERROR: el archivo no tiene datagramas A1 ni lineas HMS de una captura USB.")
         return 1
-    filas.sort(key=lambda x: (x[0], x[2].seq))      # orden por hora de la placa y luego por secuencia
+    # Referencia de tiempo: por defecto t_pc_unix (hora del receptor), la misma para cualquier archivo y con o sin
+    # SNTP en la placa (ADR-0023). t_us solo si se pide y es coherente en todo el archivo.
+    usar_t_us = False
+    if hora_placa:
+        motivo = validar_hora_placa(filas)
+        if motivo:
+            print(f"AVISO: --hora-placa rechazada: {motivo}. Se usa t_pc_unix.")
+        else:
+            usar_t_us = True
+            print("Referencia de tiempo: t_us (hora SNTP de la placa), pedida con --hora-placa; todo t_us > 0, "
+                  "no decreciente y sin saltos respecto a t_pc_unix.")
+    if not usar_t_us:
+        print("Referencia de tiempo: t_pc_unix (hora del receptor al recibir)"
+              + ("." if hora_placa else ", por defecto para cualquier archivo (ADR-0023); --hora-placa para t_us."))
+    filas = [(d.t_us / 1e6 if usar_t_us else t_pc, t_pc, d) for t_pc, d in filas]
+    filas.sort(key=lambda x: (x[0], x[2].seq))      # orden por la hora elegida y luego por secuencia
     t0 = max(filas[0][0], desde or filas[0][0])
     t1 = min(filas[-1][0], hasta or filas[-1][0])
     e = Estado()
@@ -209,7 +253,7 @@ def reproducir(archivo: Path, exportar: Path | None, fps: float, desde: float | 
     t = t0
     while t <= t1:
         while i < len(filas) and filas[i][0] <= t:
-            e.agregar_datagrama(filas[i][1], filas[i][2])
+            e.agregar_datagrama(filas[i][1], filas[i][2], t=filas[i][0])
             i += 1
         panel.dibujar(e, t_ref=t)
         if exportar:
@@ -339,8 +383,13 @@ def main() -> int:
     ap.add_argument("--nube", action="store_true", help="usar Firebase si la via local no responde")
     ap.add_argument("--exportar", type=Path, help="carpeta para los PNG de la reproduccion")
     ap.add_argument("--fps", type=float, default=10)
-    ap.add_argument("--desde", type=float, help="hora UNIX (s) de inicio de la reproduccion")
-    ap.add_argument("--hasta", type=float, help="hora UNIX (s) de fin de la reproduccion")
+    ap.add_argument("--desde", type=float, help="hora UNIX (s) de inicio de la reproduccion (en la referencia usada)")
+    ap.add_argument("--hasta", type=float, help="hora UNIX (s) de fin de la reproduccion (en la referencia usada)")
+    ap.add_argument("--hora-placa", action="store_true",
+                    help="reproduccion: usar t_us (SNTP de la placa) en vez de t_pc_unix; se rechaza con aviso si "
+                         "algun t_us es 0, si t_us retrocede o si el desfase t_us - t_pc_unix VARIA mas de "
+                         f"{SALTO_RELOJ_S:g} s respecto a su mediana (un desfase constante, de cualquier valor, "
+                         "se acepta)")
     ap.add_argument("--rotulo", default=ROTULO_REPRODUCCION, help="texto al pie de cada cuadro ('' = sin rotulo)")
     ap.add_argument("--puerto", help="en vivo: leer y guardar tambien el USB (COMx o auto = detectar la placa)")
     ap.add_argument("--segundos", type=float, help="en vivo: cerrar solo tras N segundos (prueba)")
@@ -351,7 +400,8 @@ def main() -> int:
     args = ap.parse_args()
     Estado.con_presencia = args.con_presencia
     if args.reproducir:
-        return reproducir(args.reproducir, args.exportar, args.fps, args.desde, args.hasta, args.rotulo or None)
+        return reproducir(args.reproducir, args.exportar, args.fps, args.desde, args.hasta, args.rotulo or None,
+                          args.hora_placa)
     return vivo(args.ip, args.id_sesion, args.nube, args.puerto, args.segundos, args.png)
 
 
