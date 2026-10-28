@@ -107,3 +107,31 @@ Revisión visual de las capturas y cambios hechos:
   - abrir la app en el celular por la red de casa o AURA-LAB;
   - conseguir la animación del equipo, que no llegó;
   - las propuestas para Angel.
+
+## Iteración 3 (mismo día): solo texto y tarjeta de Dispositivo
+- **Hoja ⓘ en la cabecera**, junto al sello DEMO (`src/components/aclaraciones.js`). Reúne todo lo que salió de las
+  pantallas, en frases de 12 palabras o menos:
+  - qué es real: K002, 27/10/2026, firmware 0.1.3, placa B, una sola sala, 10/10, reproducción sin sensor en vivo;
+  - qué es ejemplo;
+  - qué es ilustrativo;
+  - "AURA no diagnostica ni receta", "no reemplaza a tu médico" y el 106 (SAMU).
+- **Pantallas:**
+  - Hoy: "Movimiento en la sala" / "Todo tranquilo", con "hace N s", y la línea "Hoy".
+  - Asistente: textos cortos; el guion también va en frases cortas.
+  - Gemelo: selector "Hoy" / "Ejemplo" y fichas de dos líneas.
+  - Alerta: título nuevo, línea "Ejemplo · la respiración aún no se mide" y tendencia sin pie.
+  - Emergencia: textos cortos y solo la línea del 106.
+  - Teleconsulta: descripciones genéricas en vez de nombres de clínicas.
+  - Señal: pastilla "Prueba K002 · 27/10", tiempo "0:31" y "462 muestras/s".
+  - Sin pastillas "Prototipo".
+- **Dispositivo:**
+  - tarjeta "Tu instalación" con la mini escena 3D: nuevo modo `instalacion` del holograma, que reutiliza los modelos
+    de router y placa de K002; se pausa con IntersectionObserver y al salir de la pantalla;
+  - filas Sensor / Red / Cobertura y privacidad en tres íconos;
+  - firmware, K002 y "una sola sala" pasan al panel técnico.
+- **Arreglo en el holograma:** un mensaje "seguir" sin pausa previa ya no arranca un segundo ciclo de dibujo.
+- **Pruebas:** 10/10 criterios y la prueba nueva de honestidad. Contraste: 309 textos, mínimo 4,83:1.
+  - **Fluidez:** 60 fps estimados en la PC. En el celular, no verificado.
+- **Pruebas actualizadas, sin cambiar criterios:**
+  - la 7 busca "(simulación)" en la confirmación;
+  - la 10 verifica las tres descripciones genéricas, sin nombres de clínicas.

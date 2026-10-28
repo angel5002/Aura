@@ -3,7 +3,7 @@
 import { escuchar, estado } from "../estado.js";
 import { responderEmergencia } from "../data/fuente.js";
 import { crearAnillo, crearCheck } from "../components/anillo.js";
-import { chip, el, etiqueta, rotulo } from "../components/ui.js";
+import { el, etiqueta, rotulo } from "../components/ui.js";
 
 export default {
   id: "emergencia",
@@ -12,16 +12,16 @@ export default {
     const pregunta = el("div", { class: "emergencia-pregunta" },
       el("div", { class: "anillo-centro" }, anillo.caja, el("span", { class: "signo", "aria-hidden": "true" }, "!")),
       el("h1", { class: "titulo centrado" }, "¿Estás bien?"),
-      el("p", { class: "cuerpo centrado texto-2" }, "Escenario de demo: movimiento brusco seguido de inmovilidad en la sala."),
+      el("p", { class: "cuerpo centrado texto-2" }, "Hubo un movimiento brusco y luego quietud en la sala."),
       el("button", { class: "boton boton-claro ancho", type: "button", "data-prueba": "estoy-bien", onclick: () => responderEmergencia("bien") }, "Estoy bien"),
       el("button", { class: "boton boton-peligro ancho", type: "button", "data-prueba": "necesito-ayuda", onclick: () => responderEmergencia("ayuda") }, "Necesito ayuda"),
-      el("p", { class: "rotulo centrado" }, "Si no respondes, AURA avisa a tu familia cuando el anillo se vacía."));
+      el("p", { class: "rotulo centrado" }, "Si no respondes, avisaremos a tu familia."));
     const resultado = el("div", { class: "emergencia-resultado", hidden: true });
 
     const nodo = el("div", { class: "pantalla pantalla-emergencia" },
-      el("div", { class: "fila-entre" }, etiqueta("Posible caída · sala"), chip("prototipo")),
+      etiqueta("Posible caída · sala"),
       pregunta, resultado,
-      rotulo("Caídas es un prototipo sin validar: siempre pide confirmación. No es un servicio de emergencias; ante una urgencia llama al 106 (SAMU)."));
+      rotulo("Ante una urgencia, llama al 106 (SAMU).", "centrado"));
 
     function mostrarResultado(texto, detalle) {
       anillo.detener();
@@ -43,10 +43,10 @@ export default {
       } else if (a?.tipo === "FAMILIA_AVISADA" || a?.tipo === "AYUDA_SOLICITADA") {
         const sim = a.simulacion !== false;
         mostrarResultado(sim ? "Familia avisada (simulación)" : "Familia avisada",
-          sim ? "En el MVP, servidor.py enviaría un mensaje de Telegram a tu familiar. Aquí no se envió nada."
-              : "servidor.py envió el aviso por Telegram.");
+          sim ? "Es un ejemplo: no se envió ningún mensaje."
+              : "Avisamos a tu familia por Telegram.");
       } else if (a === null) {
-        mostrarResultado("Alerta cancelada", "Qué bueno que estés bien. No se avisó a nadie.");
+        mostrarResultado("Alerta cancelada", "Qué bueno. No avisamos a nadie.");
       }
     }
     let soltar = null;

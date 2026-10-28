@@ -14,26 +14,25 @@ export default {
     const estadoTxt = el("p", { class: "estado-senal", "data-prueba": "estado-senal" }, "—");
     const cruces = el("span", { class: "cifra", "data-valor": 0 }, "0");
     const tasa = el("span", { class: "tabular" }, "—");
-    const tiempo = el("p", { class: "rotulo tabular" }, "—");
+    const tiempo = el("p", { class: "tiempo-chico tabular" }, "—");
     const senal = crearSenal({ alto: 92 });
     const sinDatos = !estado.k002;
 
     const nodo = el("div", { class: "pantalla" },
-      etiqueta("Señal WiFi · datos reales de K002"),
+      etiqueta("Señal WiFi"),
       el("div", { class: "fila-entre" },
-        el("span", { class: "sello-reproduccion" }, el("span", { class: "punto-reproduccion" }), "Reproducción · K002 (27/10/2026)"), tiempo),
+        el("span", { class: "sello-reproduccion" }, el("span", { class: "punto-reproduccion" }), "Prueba K002 · 27/10"), tiempo),
       el("div", { class: "holo-caja holo-senal" }, holo.iframe),
-      rotulo("Ondas: ilustrativas · esquema, no a escala · Huawei–placa B: ~2 m (aprox., sin medir)."),
+      rotulo("Esquema ilustrativo"),
       sinDatos
         ? el("p", { class: "cuerpo texto-2" }, "Esta copia de la app no trae la reproducción de K002.")
         : el("section", { class: "tarjeta" },
           el("div", { class: "fila-entre" }, estadoTxt, el("div", { class: "derecha" }, el("div", {}, cruces, el("span", { class: "cifra-de" }, " / 10")),
             el("p", { class: "rotulo" }, "cruces detectados"))),
-          el("p", { class: "cuerpo" }, "Tasa de CSI: ", tasa),
+          el("p", { class: "cuerpo" }, tasa),
           senal.lienzo,
-          el("p", { class: "rotulo" }, el("span", { class: "leyenda leyenda-senal" }, "señal del detector (últimos 20 s)"), " · ",
-            el("span", { class: "leyenda leyenda-umbral" }, "umbral de entrada"))),
-      rotulo("Señal y detección: datos reales de K002. La figura sigue el protocolo de la prueba; AURA no capta la forma ni la postura del cuerpo.", "rotulo-destacado"));
+          el("p", { class: "rotulo" }, el("span", { class: "leyenda leyenda-senal" }, "señal, últimos 20 s"), " · ",
+            el("span", { class: "leyenda leyenda-umbral" }, "umbral"))));
 
     let cuadro = 0, soltar = null, ultimoEnvio = 0, previo = {};
     function pintar(m) {                        // cada cuadro, con el mismo t que la escena; solo toca lo que cambia
@@ -41,8 +40,8 @@ export default {
       const nuevo = { mov: m.mov, det: m.detectados, tasa: Math.round(m.tasa), t: m.t.toFixed(1) };
       if (nuevo.mov !== previo.mov) { estadoTxt.textContent = m.mov ? "MOVIMIENTO" : "quieto"; estadoTxt.classList.toggle("en-movimiento", m.mov); }
       if (nuevo.det !== previo.det) contar(cruces, m.detectados);
-      if (nuevo.tasa !== previo.tasa) tasa.textContent = `${nuevo.tasa} /s`;
-      if (nuevo.t !== previo.t) tiempo.textContent = `t = ${nuevo.t} s · tiempo real ×1`;
+      if (nuevo.tasa !== previo.tasa) tasa.textContent = `${nuevo.tasa} muestras/s`;
+      if (nuevo.t !== previo.t) { const seg = Math.floor(m.t); tiempo.textContent = `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, "0")}`; }
       previo = nuevo;
     }
     return {

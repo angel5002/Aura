@@ -234,6 +234,23 @@ body[data-pantalla="emergencia"] .barra-sup { background: var(--emergencia-bg); 
 .hoja .titulo { margin-bottom: var(--e1); }
 .separado { margin-top: var(--e3); padding-top: var(--e3); border-top: 1px solid var(--line); }
 
+/* ---------- iteración 3: ⓘ de la cabecera y su hoja; Dispositivo ---------- */
+.cabecera-derecha { display: inline-flex; align-items: center; gap: var(--e2); }
+.boton-info { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); font: 400 18px/1 var(--fuente); cursor: pointer; }
+.hoja { max-height: 84%; overflow-y: auto; }
+.lista-aclaraciones { margin: 0 0 var(--e2); padding-left: 18px; display: flex; flex-direction: column; gap: var(--e1); color: var(--text); }
+.tiempo-chico { font: var(--pequeno); color: var(--text-2); }
+.holo-instalacion { height: 180px; }
+.filas-icono { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fila-icono { display: flex; align-items: center; gap: var(--e3); min-height: 48px; border-top: 1px solid var(--line); }
+.fila-icono:first-child { border-top: 0; }
+.fila-icono svg, .privacidad svg { width: 22px; height: 22px; fill: none; stroke: var(--primary); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.fila-icono .valor { margin-left: auto; color: var(--text-2); }
+.privacidad { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--e2); text-align: center; }
+.privacidad li { display: flex; flex-direction: column; align-items: center; gap: var(--e2); font: var(--pequeno); color: var(--text); }
+.tendencia { display: block; width: 100%; height: 56px; }
+.tendencia path { fill: none; stroke: var(--warn); stroke-width: 2; stroke-linecap: round; opacity: 0.8; }
+
 @media (min-width: 431px) {
   #app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 }

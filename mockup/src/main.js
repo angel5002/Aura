@@ -6,6 +6,7 @@ import { escuchar, estado } from "./estado.js";
 import { iniciarFuente, irA, lanzarEscenario, tK002 } from "./data/fuente.js";
 import { gsap, transicionPantalla } from "./motion.js";
 import { mostrarBanner } from "./components/hoja.js";
+import { abrirAclaraciones } from "./components/aclaraciones.js";
 import { ICONOS, el } from "./components/ui.js";
 import inicio from "./screens/inicio.js";
 import hoy from "./screens/hoy.js";
@@ -56,10 +57,11 @@ addEventListener("hashchange", () => navegar(location.hash.replace("#/", "") || 
 
 // ---------- sello DEMO y reacciones a los datos ----------
 function pintarSello() { sello.hidden = estado.fuente !== "demo"; }
+document.getElementById("info").addEventListener("click", () => abrirAclaraciones());
 escuchar((_, p) => {
   if ("fuente" in p) pintarSello();
   if ("escenario" in p && p.escenario === "respiracion" && !["alerta", "gemelo"].includes(actualId))
-    mostrarBanner({ titulo: "Cambio detectado · DEMO", texto: "Toca para ver el escenario.", alTocar: () => navegar("alerta") });
+    mostrarBanner({ titulo: "Notamos un cambio en tus noches", texto: "Toca para verlo.", alTocar: () => navegar("alerta") });
   if ("alerta" in p && p.alerta?.tipo === "CAIDA" && actualId !== "emergencia") navegar("emergencia");
 });
 pintarSello();

@@ -87,6 +87,12 @@ test("1 · recorrido de las 9 pantallas, capturas y desbordes", async ({ page })
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${CAPTURAS}/03c_gemelo_ficha.png` });
   informe.gemelo_ficha = await page.evaluate(revisarDesbordes);
+  // Hoja ⓘ de la cabecera (iteración 3: todas las aclaraciones)
+  await abrir(page, "hoy");
+  await page.locator("[data-prueba=abrir-info]").click();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${CAPTURAS}/09_hoja_info.png` });
+  informe.hoja_info = await page.evaluate(revisarDesbordes);
   writeFileSync("pruebas/salida/desbordes.json", JSON.stringify(informe, null, 2));
   for (const [id, malos] of Object.entries(informe)) expect(malos, `desbordes en ${id}`).toEqual([]);
 });
@@ -166,15 +172,16 @@ test("5 · sin cifras de salud y sin la palabra diagnóstico", async ({ page }) 
       expect(texto, `${esc}/${id}`).not.toMatch(/diagn[oó]stic/i);
     }
   }
-  // La palabra en español (con o sin tilde, también escapada). three.min.js trae el identificador inglés
-  // `diagnostics` (propiedad interna de WebGLProgram, no se muestra): se informa aparte, no es la palabra prohibida.
+  // La palabra en español (con o sin tilde, también escapada). Se informa aparte todo archivo con la raíz "diagnostic":
+  // three.min.js trae `diagnostics` (propiedad interna de WebGLProgram) y la hoja ⓘ dice "AURA no diagnostica"
+  // (verbo, pedido por Deisy el 28/10/2026). Ninguno es la palabra "diagnóstico".
   const ingles = [];
   for (const [f, t] of textoCompilado()) {
     expect(t, f).not.toMatch(/diagn[oó]stico/i);
     expect(t, f).not.toMatch(/diagn\\u00f3stico/i);
     if (/diagnostic/i.test(t)) ingles.push(f);
   }
-  test.info().annotations.push({ type: "identificador_ingles_diagnostics", description: ingles.join(", ") });
+  test.info().annotations.push({ type: "raiz_diagnostic_no_prohibida", description: ingles.join(", ") });
 });
 
 // ---------- 6 · emergencia: 45 s, "Estoy bien" cancela, sin respuesta "Familia avisada (simulación)" ----------
@@ -216,7 +223,7 @@ test("7 · teleconsulta en ≤ 3 toques con el rótulo Simulación", async ({ pa
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${CAPTURAS}/07c_teleconsulta_confirmada.png` });
   expect(toques).toBeLessThanOrEqual(3);
-  await expect(page.locator("#app")).toContainText("Simulación");
+  await expect(page.locator("[data-prueba=cita-confirmada]")).toContainText("simulación");   // iteración 3: la pastilla vive en la hoja
 });
 
 // ---------- 8 · prefers-reduced-motion: sin bucles y transiciones de 0 ms ----------
@@ -269,6 +276,10 @@ test("9 · contraste de texto ≥ 4,5:1 (WCAG 2.1 AA)", async ({ page }) => {
   await page.locator(".frase-prueba").first().click();
   await page.waitForTimeout(900);
   await revisar("asistente_respuesta");
+  await abrir(page, "hoy");
+  await page.locator("[data-prueba=abrir-info]").click();
+  await page.waitForTimeout(700);
+  await revisar("hoja_info");
   writeFileSync("pruebas/salida/contraste.json", JSON.stringify(informe, null, 2));
   const bajos = Object.entries(informe).flatMap(([p, l]) => l.filter((x) => x.ratio < 4.5).map((x) => `${p}: "${x.texto}" ${x.ratio}`));
   const total = Object.values(informe).reduce((s, l) => s + l.length, 0);
@@ -284,7 +295,25 @@ test("10 · sin RuView y con clínicas ficticias", async ({ page }) => {
   }
   await sinInternet(page);
   await abrir(page, "teleconsulta");
+  // Iteración 3: en vez de nombres de clínicas (ni reales ni ficticios), descripciones genéricas
   const lugares = await page.locator(".opcion-lugar").allTextContents();
-  expect(lugares).toHaveLength(3);
-  for (const l of lugares) expect(l).toMatch(/Demo|Ficticio|Ejemplo/);
+  expect(lugares).toEqual(["Medicina general · videollamada", "Policlínico cercano", "Centro de salud del distrito"]);
+});
+
+// ---------- honestidad (iteración 3, no es uno de los 10 criterios): lo que salió de las pantallas está en la hoja ⓘ ----------
+test("honestidad · la hoja ⓘ conserva todas las aclaraciones, en frases de 12 palabras o menos", async ({ page }) => {
+  await sinInternet(page);
+  for (const id of PANTALLAS) {
+    await abrir(page, id);
+    await expect(page.locator("[data-prueba=abrir-info]"), id).toBeVisible();
+  }
+  await abrir(page, "hoy");
+  await page.locator("[data-prueba=abrir-info]").click();
+  const hoja = page.locator("[data-prueba=hoja-aclaraciones]");
+  await expect(hoja).toBeVisible();
+  for (const t of ["K002", "27/10/2026", "firmware 0.1.3", "una sola sala", "10 de 10", "no hay un sensor en vivo",
+    "aún no se miden", "ejemplo", "prototipo sin validar", "simulado", "no capta forma ni postura", "esquema",
+    "no diagnostica", "no reemplaza a tu médico", "106 (SAMU)", "guion fijo"]) await expect(hoja, t).toContainText(t);
+  for (const f of await hoja.locator("li").allTextContents()) expect(f.trim().split(/\s+/).length, f).toBeLessThanOrEqual(12);
+  expect(await page.locator("#pantalla").innerText()).not.toMatch(/frente a tu normal/i);
 });
