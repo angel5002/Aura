@@ -45,4 +45,18 @@ export function ventana(t, segundos = 20) {
            cruces: D.cruces.filter((c) => c >= t - segundos && c <= t).map((c) => [c, D.cruces.indexOf(c) + 1]) };
 }
 
+// Momentos de actividad: tramos en MOVIMIENTO del detector, unidos si los separa menos de `union` s
+export function momentos(union = 2) {
+  if (!D) return [];
+  const res = [];
+  let ini = null, fin = null;
+  for (let k = 0; k < D.t.length; k++) {
+    if (!D.mov[k]) continue;
+    if (ini !== null && D.t[k] - fin <= union) fin = D.t[k];
+    else { if (ini !== null) res.push([ini, fin]); ini = fin = D.t[k]; }
+  }
+  if (ini !== null) res.push([ini, fin]);
+  return res;
+}
+
 export const duracionK002 = () => (D ? D.duracion_s : 330);

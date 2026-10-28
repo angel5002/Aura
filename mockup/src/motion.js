@@ -9,7 +9,7 @@ gsap.registerPlugin(DrawSVGPlugin, SplitText);
 export const MOV = {
   pantalla: { dur: 0.28, ease: "power2.out", desliza: 24 },
   hoja: { dur: 0.36, ease: "back.out(1.2)" },
-  orbe: { dur: 2.4, ease: "sine.inOut", escala: 1.04 },
+  orbe: { dur: 4, ease: "sine.inOut", escala: 1.04 },        // respira lento (4 s por ciclo; iteración 2)
   banner: { dur: 0.42, ease: "power3.out" },
   cuenta: { dur: 45, ease: "none" },
   check: { dur: 0.6, ease: "power2.inOut" },

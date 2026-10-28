@@ -1,28 +1,32 @@
-// orbe.js — orbe del asistente. En reposo respira (escala 1 → 1,04, 2,4 s, sine.inOut). Escuchando, las barras
-// siguen el nivel real del micrófono (Web Audio, todo en el teléfono). El navegador solo da el micrófono en
-// HTTPS o localhost; si no, las barras son de demostración y lo dice. No hay reconocimiento de voz (ADR-0025).
+// orbe.js — orbe del asistente (pantalla Asistente). Resplandor difuso sin borde nítido que respira lento (escala
+// 1 → 1,04, 4 s por ciclo, sine.inOut). Escuchando, una onda suave sigue el nivel real del micrófono (Web Audio, todo
+// en el teléfono): la onda es un trazo fijo que solo se desplaza (translateX) y cambia de alto (scaleY), así que solo
+// se anima transform. El navegador da el micrófono solo en HTTPS o localhost; si no, la onda es de demostración y lo
+// dice. No hay reconocimiento de voz (ADR-0025).
 import { gsap, orbeRespira, reducido } from "../motion.js";
-import { el } from "./ui.js";
+import { el, svg } from "./ui.js";
 
-const N_BARRAS = 9;
+const ANCHO = 132, PERIODO = 44;
+function trazoOnda() {                            // tres periodos de seno: se desplaza un periodo y vuelve a empezar
+  let d = "";
+  for (let x = -PERIODO; x <= ANCHO + PERIODO; x += 2) d += `${d ? "L" : "M"}${x} ${24 + 14 * Math.sin((x / PERIODO) * 2 * Math.PI)}`;
+  return d;
+}
 
-export function crearOrbe({ grande = false, alTocar } = {}) {
-  const barras = Array.from({ length: N_BARRAS }, () => el("span", { class: "barra-voz" }));
-  const nucleo = el("span", { class: "orbe-nucleo" }, grande ? el("span", { class: "barras" }, barras) : null);
-  const boton = el("button", { class: `orbe ${grande ? "orbe-grande" : "orbe-flotante"}`, type: "button",
-    "aria-label": grande ? "Escuchar" : "Abrir el asistente", onclick: () => alTocar?.() }, nucleo);
+export function crearOrbe({ alTocar } = {}) {
+  const ruta = svg("path", { d: trazoOnda() });
+  const grupo = svg("g", {}); grupo.append(ruta);
+  const onda = svg("svg", { class: "onda", viewBox: `0 0 ${ANCHO} 48`, "aria-hidden": "true" }); onda.append(grupo);
+  const nucleo = el("span", { class: "orbe-nucleo" });
+  const boton = el("button", { class: "orbe orbe-grande", type: "button", "aria-label": "Escuchar", onclick: () => alTocar?.() }, nucleo, onda);
   let respiracion = orbeRespira(nucleo);
-  let audio = null, cuadro = 0, fin = 0;
-
-  function ponerBarras(niveles) {
-    barras.forEach((b, i) => gsap.set(b, { scaleY: 0.15 + 0.85 * Math.min(1, niveles[i] || 0) }));
-  }
-  ponerBarras(Array(N_BARRAS).fill(0.1));
+  let audio = null, cuadro = 0, fin = 0, alto = 0.12, fase = 0;
+  const poner = (a) => { alto += (a - alto) * 0.2; gsap.set(grupo, { scaleY: Math.max(0.06, alto), transformOrigin: "50% 50%", x: -fase }); };
+  poner(0.12);
 
   // Devuelve "microfono" o "simulado" (para el rótulo). Dura `segundos` y se detiene sola.
   async function escuchar(segundos = 6) {
     detenerEscucha();
-    boton.classList.add("escuchando");
     fin = performance.now() + segundos * 1000;
     let modo = "simulado", analizador = null, datos = null;
     if (window.isSecureContext && navigator.mediaDevices?.getUserMedia) {
@@ -31,21 +35,21 @@ export function crearOrbe({ grande = false, alTocar } = {}) {
         const ctx = new AudioContext();
         analizador = ctx.createAnalyser(); analizador.fftSize = 256;
         ctx.createMediaStreamSource(flujo).connect(analizador);
-        datos = new Uint8Array(analizador.frequencyBinCount);
+        datos = new Uint8Array(analizador.fftSize);
         audio = { flujo, ctx };
         modo = "microfono";
       } catch { modo = "simulado"; }
     }
     const paso = (ahora) => {
       if (ahora > fin) { detenerEscucha(); return; }
+      let nivel;
       if (analizador) {
-        analizador.getByteFrequencyData(datos);
-        const banda = Math.floor(datos.length / N_BARRAS);
-        ponerBarras(barras.map((_, i) => { let s = 0; for (let k = 0; k < banda; k++) s += datos[i * banda + k]; return s / banda / 180; }));
-      } else if (!reducido()) {
-        const t = ahora / 1000;
-        ponerBarras(barras.map((_, i) => 0.35 + 0.3 * Math.sin(t * 7 + i * 0.9) * Math.sin(t * 2.3 + i)));
-      } else ponerBarras(Array(N_BARRAS).fill(0.4));
+        analizador.getByteTimeDomainData(datos);
+        let s = 0; for (const v of datos) s += ((v - 128) / 128) ** 2;
+        nivel = Math.min(1, Math.sqrt(s / datos.length) * 5);
+      } else nivel = reducido() ? 0.4 : 0.45 + 0.25 * Math.sin(ahora / 420);
+      if (!reducido()) fase = (fase + 1.2) % PERIODO;
+      poner(0.15 + 0.85 * nivel);
       cuadro = requestAnimationFrame(paso);
     };
     cuadro = requestAnimationFrame(paso);
@@ -53,9 +57,8 @@ export function crearOrbe({ grande = false, alTocar } = {}) {
   }
   function detenerEscucha() {
     cancelAnimationFrame(cuadro);
-    boton.classList.remove("escuchando");
     if (audio) { audio.flujo.getTracks().forEach((t) => t.stop()); audio.ctx.close(); audio = null; }
-    ponerBarras(Array(N_BARRAS).fill(0.1));
+    alto = 0.12; poner(0.12);
   }
   function destruir() { detenerEscucha(); respiracion?.kill(); respiracion = null; }
   return { boton, escuchar, detenerEscucha, destruir };

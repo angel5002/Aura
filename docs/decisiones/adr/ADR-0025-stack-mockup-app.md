@@ -85,3 +85,51 @@ demás. Se entrega como la carpeta estática `app/` que monta `servidor.py` de A
 ## Cómo revertir
 Borrar `mockup/` (y `datos/procesados/mockup/`). La escena original de `analisis/escena_k002/` no depende del mockup.
 Si se adopta otro stack, crear una ADR que reemplace a esta.
+
+## Actualización 2026-10-28 (iteración 2): variantes descartadas y refinamiento
+La ADR sigue en Propuesta, así que se completa aquí sin reescribir lo anterior.
+
+**1. Variantes A y B, probadas y descartadas (decisión de Deisy).** Deisy pidió dos variantes de Hoy y Gemelo:
+- **A:** tema claro y cálido, con oscuro solo en Gemelo y Señal;
+- **B:** todo oscuro y cálido.
+
+En ambas: un solo acento verde azulado, estados en salvia, ocre y ladrillo, Atkinson Hyperlegible Next en el texto y
+Fraunces (eje SOFT) en los títulos. Se instalaron `@fontsource-variable/atkinson-hyperlegible-next@5.3.0` y
+`@fontsource-variable/fraunces@5.3.0`, y el Gemelo pasó a una silueta SVG. Deisy las vio y **las descartó**: "no me
+gustan". Se vuelve al diseño de la iteración 1 (commit `cccda59`) como base visual, solo refinado, sin explorar ideas
+nuevas. Con su confirmación se desinstalaron los dos paquetes de fuentes y se borraron los archivos de las variantes.
+Tipografía y paleta del punto 2 de la decisión se mantienen: **Inter** y el **azul noche** de la especificación.
+
+**2. Refinamiento aplicado (valores de Deisy):**
+- Colores:
+  - cian de marca `#5CC8D6` (antes `#22D3EE`);
+  - estados: verde `#6FCF97`, ámbar `#E8B04A`, rojo `#F07A6A`;
+  - "Necesito ayuda" sigue en `#DC2626` con texto blanco.
+- Brillos solo en el logo, el orbe y el holograma, difusos y de baja intensidad (bloom 0,45 en Gemelo, 0,6 en Señal).
+- Cuadrícula de fondo con opacidad 0,028 (antes 0,06) y bordes con 0,1 (antes 0,25).
+- Títulos y cifras en peso 600. El logotipo conserva 800 porque es la marca, no un título.
+- Una sola etiqueta en mayúsculas espaciadas por pantalla, más discreta (11/500, 0,14 em, color `muted`); el resto son
+  subtítulos sin mayúsculas.
+- Pastillas de estado con fondo tenue y sin borde, solo donde hacen falta.
+- El sello "DEMO · reproducción" queda solo en la cabecera: se quitaron los DEMO de Alerta y Emergencia.
+
+**3. Estructura rescatada de la iteración 2 (no su estética):**
+- el orbe pasa a ser la pestaña central de la barra inferior, del tamaño de un ícono, y ya no tapa contenido;
+- Hoy en lenguaje humano: frase de estado y línea de momentos de actividad de K002, sin tasa de CSI ni umbrales;
+- en Gemelo: selector "Hoy (datos reales)" / "Escenario de demostración", ficha al tocar una zona (qué mide, estado,
+  por qué) y las líneas Medido hoy / En prueba / Próximamente.
+
+**4. Agente:** en Asistente, un resplandor difuso sin borde que respira en 4 s (antes 2,4 s); las barras de voz pasan a
+ser una onda suave que solo se desplaza y cambia de alto (transform).
+
+**5. Gemelo:** vuelve la figura holográfica 3D, con zonas de órganos dentro que se encienden con suavidad.
+- Datos reales: figura en cian tenue, zonas apagadas ("sin medición"); el halo responde al movimiento real.
+- Escenario: pulmones en ámbar con "Respiración más rápida que tu normal" (o caídas en rojo), y la pantalla rotulada
+  como escenario.
+
+**6. Contraste:** calculado sobre bg, surface, surface-2 y el fondo de emergencia. Los colores nuevos dan ≥ 5,63:1 y
+las pastillas con fondo tenue ≥ 4,61:1. La pastilla gris usa `text-2`, porque con `muted` sobre su tinte daba
+4,22:1. Medido con Playwright: 294 textos, mínimo 4,83:1.
+
+**7. Pruebas:** 10/10 de nuevo. Los 45 fps en el celular siguen **no verificados**. Estimado en la PC: 60 fps en Hoy,
+Gemelo y Señal, también con la CPU frenada ×4.

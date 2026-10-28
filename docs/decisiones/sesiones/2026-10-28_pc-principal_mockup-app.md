@@ -84,3 +84,26 @@ Revisión visual de las capturas y cambios hechos:
 - **Archivos y datos:**
   - `docs/mockup/referencias/K002_escena3d_1080p30.mp4` (145 MB) sigue en la carpeta, fuera de git.
   - `mockup/app/` lleva la reproducción K002 y el modelo: una copia para Angel sale solo con autorización.
+
+## Iteración 2 (mismo día)
+- **Paso 1:** variantes A (claro cálido, con oscuro en Gemelo y Señal) y B (todo oscuro cálido) de Hoy y Gemelo, con
+  Atkinson Hyperlegible Next y Fraunces, instaladas con confirmación. Deisy las **descartó**: se vuelve a la base
+  visual de `cccda59`, solo refinada.
+- **Limpieza (con confirmación):** desinstaladas las dos fuentes (`package.json` y lock iguales a `cccda59`); borrados
+  `silueta.js`, `variantes.spec.js` y sus capturas.
+- **Refinamiento:**
+  - paleta `#5CC8D6` / `#6FCF97` / `#E8B04A` / `#F07A6A`;
+  - brillos solo en el logo, el orbe y el holograma; cuadrícula y bordes más tenues;
+  - títulos en 600; una etiqueta en mayúsculas por pantalla; pastillas tenues sin borde; DEMO solo en la cabecera;
+  - el orbe como pestaña central, y en Asistente un resplandor que respira en 4 s con una onda;
+  - Hoy en lenguaje humano;
+  - Gemelo 3D con zonas de órganos, selector real/escenario, fichas y las tres líneas.
+- **Pruebas:** Playwright 10/10. Contraste: 294 textos, mínimo 4,83:1. Emergencia: aviso a los 45,0 s.
+  - **Fluidez:** 60 fps estimados en la PC, también con la CPU ×4. En el celular, no verificado.
+- **Fallo en el camino:** la prueba 9 se quedó sin tiempo porque buscaba `.frase`, clase renombrada a
+  `.frase-prueba` (el nombre `.frase` pasó al título de Hoy). Se corrigió el selector; el criterio no cambió.
+- **Pendientes:**
+  - medir los 45 fps en el celular;
+  - abrir la app en el celular por la red de casa o AURA-LAB;
+  - conseguir la animación del equipo, que no llegó;
+  - las propuestas para Angel.

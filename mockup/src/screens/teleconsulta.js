@@ -15,7 +15,7 @@ export default {
   id: "teleconsulta",
   crear({ navegar }) {
     const fondo = el("div", { class: "teleconsulta-fondo" },
-      el("div", { class: "fila-entre" }, etiqueta("Teleconsulta"), chip("simulacion")),
+      etiqueta("Teleconsulta"),
       titulo("Agenda con tu médico"),
       el("p", { class: "cuerpo texto-2" }, "Elige un horario. Tu médico recibiría el reporte de AURA."));
     const confirmacion = el("div", { class: "confirmacion", hidden: true });
@@ -29,7 +29,7 @@ export default {
         el("span", { class: "opcion-tipo" }, h.tipo),
         el("span", { class: "opcion-hora tabular" }, h.horario)));
       hoja = abrirHoja(el("div", { class: "hoja-cuerpo" },
-        el("div", { class: "fila-entre" }, el("p", { class: "etiqueta" }, "Horarios disponibles"), chip("simulacion")),
+        el("div", { class: "fila-entre" }, el("p", { class: "subtitulo" }, "Horarios disponibles"), chip("simulacion")),
         opciones,
         el("p", { class: "rotulo" }, "Cubierto por tu seguro: simulación.")));
     }

@@ -15,7 +15,7 @@ export default {
         : "Gracias. Seguiré atento y te preguntaré otra vez si el cambio continúa.";
     };
     const nodo = el("div", { class: "pantalla" },
-      el("div", { class: "fila-entre" }, etiqueta("Cambio detectado"), chip("demo")),
+      etiqueta("Cambio detectado"),
       titulo("Algo cambió frente a tu normal"),
       el("p", { class: "aviso-ilustrativo", "data-prueba": "rotulo-ilustrativo" },
         "Escenario ilustrativo: la medición de respiración está en investigación"),

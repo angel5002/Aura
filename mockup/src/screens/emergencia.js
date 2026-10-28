@@ -19,7 +19,7 @@ export default {
     const resultado = el("div", { class: "emergencia-resultado", hidden: true });
 
     const nodo = el("div", { class: "pantalla pantalla-emergencia" },
-      el("div", { class: "fila-entre" }, etiqueta("Posible caída · sala"), el("span", { class: "chips" }, chip("prototipo"), chip("demo"))),
+      el("div", { class: "fila-entre" }, etiqueta("Posible caída · sala"), chip("prototipo")),
       pregunta, resultado,
       rotulo("Caídas es un prototipo sin validar: siempre pide confirmación. No es un servicio de emergencias; ante una urgencia llama al 106 (SAMU)."));
 

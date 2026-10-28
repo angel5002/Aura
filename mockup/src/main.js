@@ -1,10 +1,10 @@
-// main.js — arranque, navegación (rutas #/pantalla), barra inferior, orbe flotante y sello "DEMO · reproducción".
+// main.js — arranque, navegación (rutas #/pantalla), barra inferior (el orbe es la pestaña central: no flota sobre
+// el contenido) y sello "DEMO · reproducción" en la cabecera (el único sello DEMO de la app).
 import "./tokens.css";
 import "./base.css";
 import { escuchar, estado } from "./estado.js";
 import { iniciarFuente, irA, lanzarEscenario, tK002 } from "./data/fuente.js";
 import { gsap, transicionPantalla } from "./motion.js";
-import { crearOrbe } from "./components/orbe.js";
 import { mostrarBanner } from "./components/hoja.js";
 import { ICONOS, el } from "./components/ui.js";
 import inicio from "./screens/inicio.js";
@@ -18,7 +18,7 @@ import teleconsulta from "./screens/teleconsulta.js";
 import dispositivo from "./screens/dispositivo.js";
 
 const PANTALLAS = Object.fromEntries([inicio, hoy, asistente, gemelo, senal, alerta, emergencia, teleconsulta, dispositivo].map((p) => [p.id, p]));
-const PESTANAS = [["hoy", "Hoy"], ["gemelo", "Gemelo"], ["senal", "Señal"], ["dispositivo", "Dispositivo"]];
+const PESTANAS = [["hoy", "Hoy"], ["gemelo", "Gemelo"], ["asistente", "AURA"], ["senal", "Señal"], ["dispositivo", "Dispositivo"]];
 const SIN_BARRA = new Set(["inicio", "emergencia"]);
 const params = new URLSearchParams(location.search);
 
@@ -26,12 +26,11 @@ const contenedor = document.getElementById("pantalla");
 const sello = document.getElementById("sello");
 let actual = null, actualId = null;
 
-// ---------- barra inferior y orbe flotante ----------
+// ---------- barra inferior ----------
 const barra = document.getElementById("barra");
-const pestanas = PESTANAS.map(([id, nombre]) => el("a", { class: "pestana", href: `#/${id}`, "data-pantalla": id, html: `${ICONOS[id]}<span>${nombre}</span>` }));
-barra.append(pestanas[0], pestanas[1], el("span", { class: "hueco-orbe" }), pestanas[2], pestanas[3]);
-const orbe = crearOrbe({ alTocar: () => navegar("asistente") });
-document.getElementById("orbe").append(orbe.boton);
+const pestanas = PESTANAS.map(([id, nombre]) => el("a", { class: `pestana${id === "asistente" ? " pestana-orbe" : ""}`, href: `#/${id}`,
+  "data-pantalla": id, "aria-label": id === "asistente" ? "Asistente AURA" : null, html: `${ICONOS[id]}<span>${nombre}</span>` }));
+barra.append(...pestanas);
 
 // ---------- navegación ----------
 export async function navegar(id, opciones = {}) {
@@ -59,7 +58,7 @@ addEventListener("hashchange", () => navegar(location.hash.replace("#/", "") || 
 function pintarSello() { sello.hidden = estado.fuente !== "demo"; }
 escuchar((_, p) => {
   if ("fuente" in p) pintarSello();
-  if ("escenario" in p && p.escenario === "respiracion" && actualId !== "alerta")
+  if ("escenario" in p && p.escenario === "respiracion" && !["alerta", "gemelo"].includes(actualId))
     mostrarBanner({ titulo: "Cambio detectado · DEMO", texto: "Toca para ver el escenario.", alTocar: () => navegar("alerta") });
   if ("alerta" in p && p.alerta?.tipo === "CAIDA" && actualId !== "emergencia") navegar("emergencia");
 });

@@ -3,7 +3,7 @@ import { estado } from "../estado.js";
 import { FRASES, responder } from "../data/guion.js";
 import { aparecerTexto } from "../motion.js";
 import { crearOrbe } from "../components/orbe.js";
-import { burbuja, chip, el, etiqueta, rotulo } from "../components/ui.js";
+import { burbuja, chip, el, etiqueta, rotulo, subtitulo } from "../components/ui.js";
 
 // Voz de respuesta: solo voces del propio teléfono (localService), nada sale a internet
 function hablar(texto) {
@@ -22,13 +22,12 @@ export default {
       burbuja("Hola. Puedo contarte el movimiento de hoy, mostrarte tu gemelo digital o ayudarte a agendar con tu médico."));
     const nota = el("p", { class: "rotulo centrado" }, "Toca el orbe para probar el micrófono, o elige una frase.");
     const orbe = crearOrbe({
-      grande: true,
       alTocar: async () => {
         nota.textContent = "Escuchando…";
         const modo = await orbe.escuchar(6);
         nota.textContent = modo === "microfono"
-          ? "Las barras siguen tu micrófono. El mockup no transcribe la voz: elige una frase."
-          : "Barras de demostración: el micrófono necesita HTTPS o localhost. Elige una frase.";
+          ? "La onda sigue tu micrófono. El mockup no transcribe la voz: elige una frase."
+          : "Onda de demostración: el micrófono necesita HTTPS o localhost. Elige una frase.";
       },
     });
 
@@ -55,8 +54,8 @@ export default {
       el("div", { class: "orbe-zona" }, orbe.boton),
       nota,
       conversacion,
-      el("p", { class: "etiqueta" }, "Frases de prueba"),
-      el("div", { class: "frases" }, FRASES.map((f) => el("button", { class: "frase", type: "button", onclick: () => preguntar(f) }, f.texto))),
+      subtitulo("Frases de prueba"),
+      el("div", { class: "frases" }, FRASES.map((f) => el("button", { class: "frase-prueba", type: "button", onclick: () => preguntar(f) }, f.texto))),
       rotulo("Guion de demostración: AURA responde con reglas fijas, nunca recomienda medicamentos y deriva a tu médico. "
         + `Fuente del movimiento: ${estado.origenMov === "via_local" ? "vía local" : "reproducción K002"}.`));
     return { nodo, mostrar() {}, ocultar() { orbe.destruir(); if ("speechSynthesis" in window) speechSynthesis.cancel(); } };

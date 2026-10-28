@@ -21,7 +21,7 @@ export default {
     const nodo = el("div", { class: "pantalla" },
       etiqueta("Señal WiFi · datos reales de K002"),
       el("div", { class: "fila-entre" },
-        el("span", { class: "sello-reproduccion" }, el("span", { class: "punto-reproduccion" }), "REPRODUCCIÓN · K002 (27/10/2026)"), tiempo),
+        el("span", { class: "sello-reproduccion" }, el("span", { class: "punto-reproduccion" }), "Reproducción · K002 (27/10/2026)"), tiempo),
       el("div", { class: "holo-caja holo-senal" }, holo.iframe),
       rotulo("Ondas: ilustrativas · esquema, no a escala · Huawei–placa B: ~2 m (aprox., sin medir)."),
       sinDatos

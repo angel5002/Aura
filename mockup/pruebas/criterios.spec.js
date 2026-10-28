@@ -77,6 +77,16 @@ test("1 · recorrido de las 9 pantallas, capturas y desbordes", async ({ page })
     }
     informe[id] = await page.evaluate(revisarDesbordes);
   }
+  // Gemelo: escenario de demostración y ficha de una zona (capturas extra de la iteración 2)
+  await abrir(page, "gemelo");
+  await page.locator("[data-prueba=modo-escenario]").click();
+  await page.waitForTimeout(2500);                                       // las zonas se encienden con suavidad
+  await page.screenshot({ path: `${CAPTURAS}/03b_gemelo_escenario.png` });
+  informe.gemelo_escenario = await page.evaluate(revisarDesbordes);
+  await page.locator("[data-modulo=pulmones]").first().click();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${CAPTURAS}/03c_gemelo_ficha.png` });
+  informe.gemelo_ficha = await page.evaluate(revisarDesbordes);
   writeFileSync("pruebas/salida/desbordes.json", JSON.stringify(informe, null, 2));
   for (const [id, malos] of Object.entries(informe)) expect(malos, `desbordes en ${id}`).toEqual([]);
 });
@@ -256,7 +266,7 @@ test("9 · contraste de texto ≥ 4,5:1 (WCAG 2.1 AA)", async ({ page }) => {
   await page.waitForTimeout(900);
   await revisar("emergencia_resultado");
   await abrir(page, "asistente");
-  await page.locator(".frase").first().click();
+  await page.locator(".frase-prueba").first().click();
   await page.waitForTimeout(900);
   await revisar("asistente_respuesta");
   writeFileSync("pruebas/salida/contraste.json", JSON.stringify(informe, null, 2));

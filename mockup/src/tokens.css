@@ -1,23 +1,25 @@
-/* tokens.css — sistema visual del mockup (docs/mockup/AURA_mockup_especificacion.pdf, "Sistema visual").
-   Contraste medido (WCAG 2.1): muted y danger NO van como texto sobre surface-2 (4,44:1 y 4,09:1). */
+/* tokens.css — sistema visual del mockup (docs/mockup/AURA_mockup_especificacion.pdf, "Sistema visual"), con el
+   refinamiento de la iteración 2 pedido por Deisy el 28/10/2026: cian #5CC8D6, estados #6FCF97 / #E8B04A / #F07A6A,
+   cuadrícula a la mitad, bordes tenues, títulos en 600. Contraste medido (WCAG 2.1, mínimos):
+   primary 7,82 · ok 8,09 · warn 7,86 · danger 5,63 · text-2 6,00 sobre surface-2; pastillas (color al 14 % de fondo)
+   ≥ 4,61:1. muted NO va como texto sobre surface-2 (4,44:1). */
 @import "@fontsource/inter/latin-400.css";
 @import "@fontsource/inter/latin-600.css";
-@import "@fontsource/inter/latin-700.css";
 @import "@fontsource/inter/latin-800.css";
 
 :root {
   /* colores */
   --bg: #05080f;
-  --grid: rgba(34, 211, 238, 0.06);
+  --grid: rgba(92, 200, 214, 0.028);   /* menos de la mitad de la iteración 1 */
   --surface: #0c1a26;
   --surface-2: #13263a;
-  --line: rgba(34, 211, 238, 0.25);
+  --line: rgba(92, 200, 214, 0.1);
   --text: #f1f5f9;
   --text-2: #94a3b8;
-  --primary: #22d3ee;
-  --ok: #4ade80;
-  --warn: #fbbf24;
-  --danger: #ef4444;
+  --primary: #5cc8d6;
+  --ok: #6fcf97;
+  --warn: #e8b04a;
+  --danger: #f07a6a;
   --danger-boton: #dc2626;      /* "Necesito ayuda": texto blanco, 4,8:1 */
   --muted: #7c8ba1;
   --emergencia-bg: #1a0709;     /* fondo sólido de la pantalla de emergencia (para medir contraste) */
@@ -25,20 +27,26 @@
   /* tipografía */
   --fuente: "Inter", system-ui, sans-serif;
   --marca: 800 40px/1 var(--fuente);
-  --cifra: 700 34px/1.1 var(--fuente);
-  --titulo: 700 22px/1.25 var(--fuente);
-  --etiqueta: 600 11px/1.3 var(--fuente);
+  --cifra: 600 34px/1.1 var(--fuente);
+  --titulo: 600 22px/1.25 var(--fuente);
+  --frase: 600 26px/1.2 var(--fuente);
+  --etiqueta: 500 11px/1.3 var(--fuente);   /* mayúsculas espaciadas: una sola por pantalla */
+  --subtitulo: 600 13px/1.3 var(--fuente);
   --cuerpo: 400 15px/1.45 var(--fuente);
-  --pequeno: 400 12px/1.4 var(--fuente);
+  --pequeno: 400 13px/1.4 var(--fuente);
 
   /* medidas: múltiplos de 4 */
   --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e6: 24px; --e8: 32px;
   --r-tarjeta: 16px;
   --r-boton: 12px;
   --r-pildora: 999px;
-  --barra-alto: 68px;
+  --barra-alto: 72px;
   --ancho: 390px;
 
-  /* movimiento (la tabla de la especificación; motion.js usa los mismos valores) */
-  --t-pantalla: 280ms;
+  /* tintes de las pastillas de estado (fondo tenue, sin borde) */
+  --tinte-primary: rgba(92, 200, 214, 0.14);
+  --tinte-ok: rgba(111, 207, 151, 0.14);
+  --tinte-warn: rgba(232, 176, 74, 0.14);
+  --tinte-danger: rgba(240, 122, 106, 0.14);
+  --tinte-muted: rgba(148, 163, 184, 0.1);
 }
