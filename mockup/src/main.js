@@ -18,8 +18,11 @@ import alerta from "./screens/alerta.js";
 import emergencia from "./screens/emergencia.js";
 import teleconsulta from "./screens/teleconsulta.js";
 import dispositivo from "./screens/dispositivo.js";
+import noche from "./screens/noche.js";
 
-const PANTALLAS = Object.fromEntries([inicio, hoy, asistente, gemelo, senal, alerta, emergencia, teleconsulta, dispositivo].map((p) => [p.id, p]));
+// "noche" existe solo en el escenario simulado "bienestar_video" del video (no es una de las 9 pantallas)
+const LISTA = [inicio, hoy, asistente, gemelo, senal, alerta, emergencia, teleconsulta, dispositivo, ...(ESCENARIO_VIDEO === "bienestar_video" ? [noche] : [])];
+const PANTALLAS = Object.fromEntries(LISTA.map((p) => [p.id, p]));
 const PESTANAS = [["hoy", "Hoy"], ["gemelo", "Gemelo"], ["asistente", "AURA"], ["senal", "Señal"], ["dispositivo", "Dispositivo"]];
 const SIN_BARRA = new Set(["inicio", "emergencia"]);
 const params = new URLSearchParams(location.search);
@@ -81,6 +84,7 @@ if (ESCENARIO_VIDEO) Object.assign(window.__aura, {
     document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t * 1000; });
     return actual?.cuadro?.(t, extra) ?? true;
   },
+  objetivos: () => actual?.objetivos?.() ?? null,
 });
 window.AURA_HOLO = { setZona() {}, escanear: () => navegar("gemelo", { escanear: true }) };
 

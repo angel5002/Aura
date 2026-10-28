@@ -5,6 +5,36 @@ import { escuchar, estado } from "../estado.js";
 import { tK002 } from "../data/fuente.js";
 import { duracionK002, momentos } from "../data/k002.js";
 import { el, etiqueta, subtitulo, svg } from "../components/ui.js";
+import { ESCENARIO_VIDEO } from "../data/video.js";
+
+// Escenario simulado "bienestar_video" (solo el video): actividad en la sala de 7 días, sintética; las 3 últimas,
+// más bajas (en ámbar). El video fija el crecimiento de las barras y la frase con cuadro(t, {barras, linea}).
+const SEMANA = [["L", 0.78], ["M", 0.86], ["M", 0.74], ["J", 0.82], ["V", 0.5], ["S", 0.44], ["D", 0.4]];
+const COSTUMBRE = 0.8;
+function crearSemana() {
+  const frase = el("h1", { class: "frase", "data-prueba": "frase-semana" }, "Estos días te moviste menos que de costumbre");
+  const barras = SEMANA.map(([, v], k) => el("div", { class: `barra-dia${k >= 4 ? " menos" : ""}`, "data-valor": v }));
+  const nodo = el("div", { class: "pantalla" },
+    etiqueta("Tu semana"),
+    el("section", { class: "tarjeta linea-dia" },
+      subtitulo("Actividad en la sala"),
+      el("div", { class: "barras-semana" }, el("div", { class: "costumbre", style: `bottom:${COSTUMBRE * 100}%` }),
+        barras.map((b) => el("div", { class: "barra-pista" }, b))),
+      el("div", { class: "dias-semana" }, SEMANA.map(([d]) => el("span", {}, d)))),
+    frase);
+  const suave = (q) => q * q * (3 - 2 * q);
+  return {
+    nodo, mostrar() {}, ocultar() {},
+    cuadro(t, { barras: qb = 1, linea = 1 } = {}) {
+      barras.forEach((b, k) => {
+        const q = suave(Math.max(0, Math.min(1, qb * 1.6 - k * 0.1)));
+        b.style.transform = `scaleY(${(SEMANA[k][1] * q).toFixed(4)})`;
+      });
+      frase.style.opacity = linea;
+      return true;
+    },
+  };
+}
 
 const hace = (m) => {
   if (!m) return "";
@@ -17,6 +47,7 @@ const hace = (m) => {
 export default {
   id: "hoy",
   crear() {
+    if (ESCENARIO_VIDEO === "bienestar_video") return crearSemana();
     const titulo = el("h1", { class: "frase", "data-prueba": "estado-mov" }, "—");
     const cuando = el("p", { class: "tiempo-chico tabular" }, "");
     const dur = duracionK002();

@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <title>AURA · escenario de demostración (video)</title>
 <!--
-  escenario.html — animación corta (~22 s, 1920 × 1080) para el video, con el mockup actual (iteración 4).
-  ESCENARIO SIMULADO: la señal, la caminata y la caída de la figura son sintéticas (escenario "caida_video" del
-  holograma) y NO se mezclan con datos de K002 (K002 no tiene caídas). La figura es ilustrativa: AURA no capta la
-  postura; la caída es parte del guion, no del WiFi. Marcos de celular genéricos; la notificación es de AURA, genérica.
+  escenario.html — animaciones cortas (1920 × 1080) para el video, con el mockup actual (iteración 4). ?escenario=
+    caida_video (por omisión, ~22 s): la señal, la caminata y la caída de la figura son sintéticas y NO se mezclan con
+      datos de K002 (K002 no tiene caídas). AURA no capta la postura; la caída es parte del guion, no del WiFi.
+    bienestar_video (~24 s): noche, semana y pregunta del asistente, todo sintético; no demuestra monitoreo del sueño,
+      de la rutina ni del estado emocional. Primero se pregunta a la persona; la familia solo recibe lo que ella elige.
+  Ambos son ESCENARIOS SIMULADOS (sin K002 ni /ws). Marcos de celular genéricos; la notificación es de AURA, genérica.
   Una sola línea de tiempo GSAP (en pausa) controla todo: window.__setTime(t) la lleva a t y dibuja ese cuadro en los
   iframes del mockup (tiempo determinista). Lo renderiza video/renderizar.mjs cuadro a cuadro con Playwright y ffmpeg.
   Se sirve desde mockup/ (necesita app/ compilada: npm run build).
@@ -71,6 +73,10 @@
   .rotulo-fijo { position: absolute; left: 40px; bottom: 34px; display: flex; align-items: center; gap: 10px;
     font: 500 18px/1 var(--fuente); color: var(--text-2); }
   .rotulo-fijo i { width: 8px; height: 8px; border-radius: 50%; background: #e8b04a; }
+
+  /* indicador de toque (bienestar_video): dónde "toca" la persona */
+  .toque { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; z-index: 4; opacity: 0;
+    background: rgba(241,245,249,.25); box-shadow: 0 0 0 2px rgba(241,245,249,.8), 0 0 18px rgba(241,245,249,.35); pointer-events: none; }
 </style>
 </head>
 <body>
@@ -83,11 +89,11 @@
 
 <div class="celular" id="cel1">
   <p class="rotulo-cel" id="rot1">En casa</p>
-  <div class="vidrio">
+  <div class="vidrio" id="vidrio1">
     <div class="isla"></div>
-    <div class="barra-estado"><span>10:24</span><span class="iconos"><span class="barras"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bateria"><i></i></span></span></div>
-    <iframe id="app-senal" title="AURA · Señal (escenario)" src="../app/index.html?escenario=caida_video&quedarse=1#/senal"></iframe>
-    <iframe id="app-emergencia" title="AURA · Emergencia (escenario)" src="../app/index.html?escenario=caida_video&quedarse=1#/emergencia" style="opacity:0"></iframe>
+    <div class="barra-estado"><span id="hora1"></span><span class="iconos"><span class="barras"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bateria"><i></i></span></span></div>
+    <!-- iframes del mockup en modo escenario: los crea el script según ?escenario= -->
+    <div class="toque" id="toque1"></div><div class="toque" id="toque2"></div>
   </div>
   <div class="acelerado" id="acelerado"><b>×10</b><span>cuenta acelerada</span></div>
 </div>
@@ -99,17 +105,17 @@
     <div class="isla"></div>
     <div class="barra-estado"><span></span><span class="iconos"><span class="barras"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bateria"><i></i></span></span></div>
     <p class="fecha">miércoles, 28 de octubre</p>
-    <p class="hora">10:25</p>
+    <p class="hora" id="hora2"></p>
     <div class="aviso" id="aviso">
       <div class="aviso-cab"><span class="icono-app">A</span><span class="aviso-app">AURA</span><span class="aviso-cuando">ahora</span></div>
-      <p class="aviso-texto">Posible caída de Rosa en la sala. No responde.</p>
+      <p class="aviso-texto" id="aviso-texto"></p>
     </div>
   </div>
 </div>
 
 <section class="portada" id="cierre">
   <h1 class="marca">AURA</h1>
-  <p class="lema">Escenario de demostración · prototipo</p>
+  <p class="lema" id="cierre-lema"></p>
 </section>
 
 <p class="rotulo-fijo"><i></i>Escenario de demostración</p>
@@ -117,7 +123,9 @@
 <script type="module">
 import { gsap } from "../node_modules/gsap/index.js";
 
-const DURACION = 22;
+const rampa = (x) => Math.max(0, Math.min(1, x));
+
+// ---------- caida_video: Señal (camina y cae) → Emergencia (×10) → Familia ----------
 // Cuenta regresiva de Emergencia (45 s): ×1 desde 10,0 s y ×10 desde 12,8 s, así llega a 0:00 en 17,02 s con el
 // rótulo "×10" verdadero (42,2 s de cuenta en 4,22 s de video)
 const CUENTA = { inicio: 10.0, acelera: 12.8, x: 10, total: 45 };
@@ -128,47 +136,123 @@ function restante(t) {
   return Math.max(0, CUENTA.total - (CUENTA.acelera - CUENTA.inicio) - CUENTA.x * (t - CUENTA.acelera));
 }
 
+// ---------- bienestar_video: Noche → Hoy (semana) → Asistente (pregunta a la persona) → Familia ----------
+// Orden: primero se pregunta a la persona; la familia solo recibe lo que ella elige ("Llamar a mi familia", 15,9 s)
+const TOQUES = { conversar: 14.0, familia: 15.9 };
+const asistente = (t) => ({
+  pregunta: rampa((t - 12.5) / 0.4), opciones: rampa((t - 12.9) / 0.4),
+  eco: t >= TOQUES.conversar + 0.3 ? rampa((t - TOQUES.conversar - 0.3) / 0.35) : 0,
+  opciones2: rampa((t - TOQUES.conversar - 0.6) / 0.4),
+  elegido: t >= TOQUES.familia + 0.1, confirma: rampa((t - TOQUES.familia - 0.35) / 0.4),
+});
+
+const ESCENARIOS = {
+  caida_video: {
+    duracion: 22, fin: 20.0, familia: 17.0, aviso: 17.5, horas: ["10:24", "10:25"],
+    pantallas: ["senal", "emergencia"],
+    texto: "Posible caída de Rosa en la sala. No responde.",
+    cierre: "Escenario de demostración · prototipo",
+    linea(tl) {
+      tl.to("#app-emergencia", { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 10.0)
+        .fromTo("#acelerado", { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.35 }, CUENTA.acelera - 0.2)
+        .to("#acelerado", { opacity: 0, duration: 0.3, ease: "power1.in" }, CERO + 0.1);
+    },
+    sincronizar(t, app) {
+      let ok = true;
+      if (t >= 1.7 && t < 10.5) ok = app.senal.cuadro(t) && ok;
+      if (t >= 9.9) ok = app.emergencia.cuadro(t, { restante: restante(t), avisando: t >= CERO ? t - CERO : null }) && ok;
+      return ok;
+    },
+  },
+  bienestar_video: {
+    duracion: 24, fin: 21.0, familia: 17.0, aviso: 17.6, horas: ["09:12", "09:14"],
+    pantallas: ["noche", "hoy", "asistente"],
+    texto: "Rosa quiere conversar contigo. ¿La llamas?",
+    cierre: "Escenario de demostración · funciones en desarrollo",
+    linea(tl) {
+      tl.to("#app-hoy", { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 7.0)
+        .to("#app-asistente", { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 12.0);
+      // indicador de toque: aparece, presiona y se desvanece
+      for (const [id, t0] of [["#toque1", TOQUES.conversar], ["#toque2", TOQUES.familia]])
+        tl.fromTo(id, { opacity: 0, scale: 1.35 }, { opacity: 1, scale: 1, duration: 0.2 }, t0 - 0.25)
+          .to(id, { scale: 0.82, duration: 0.1, ease: "power1.in" }, t0)
+          .to(id, { scale: 1.5, opacity: 0, duration: 0.35 }, t0 + 0.12);
+    },
+    sincronizar(t, app) {
+      let ok = true;
+      if (t >= 1.7 && t < 7.5) ok = app.noche.cuadro(t) && ok;
+      if (t >= 6.9 && t < 12.5) ok = app.hoy.cuadro(t, { barras: rampa((t - 7.5) / 0.9), linea: rampa((t - 8.4) / 0.5) }) && ok;
+      if (t >= 11.9) ok = app.asistente.cuadro(t, asistente(t)) && ok;
+      return ok;
+    },
+    // posición de los toques: se mide en el asistente con cada estado y se fija (no cambia entre cuadros)
+    preparar(app) {
+      const marco = document.querySelector("#app-asistente");
+      app.asistente.cuadro(13.5, asistente(13.5));
+      const a = app.asistente.objetivos()["quiero-conversar"];
+      app.asistente.cuadro(15.5, asistente(15.5));
+      const b = app.asistente.objetivos()["llamar-familia"];
+      for (const [id, p] of [["#toque1", a], ["#toque2", b]])
+        Object.assign(document.querySelector(id).style, { left: `${marco.offsetLeft + p.x}px`, top: `${marco.offsetTop + p.y}px` });
+    },
+  },
+};
+const NOMBRE = new URLSearchParams(location.search).get("escenario") === "bienestar_video" ? "bienestar_video" : "caida_video";
+const E = ESCENARIOS[NOMBRE];
+const DURACION = E.duracion;
+
+// ---------- marcos y textos del escenario ----------
 const $ = (s) => document.querySelector(s);
+$("#hora1").textContent = E.horas[0]; $("#hora2").textContent = E.horas[1];
+$("#aviso-texto").textContent = E.texto; $("#cierre-lema").textContent = E.cierre;
+const marcos = E.pantallas.map((p, k) => {
+  const f = document.createElement("iframe");
+  Object.assign(f, { id: `app-${p}`, title: `AURA · ${p} (escenario de demostración)`, src: `../app/index.html?escenario=${NOMBRE}&quedarse=1#/${p}` });
+  if (k) f.style.opacity = 0;
+  $("#vidrio1").insertBefore(f, $("#toque1"));
+  return f;
+});
+
+// ---------- una sola línea de tiempo (común + la del escenario) ----------
 const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
 // 0–2 s: logo y lema
 tl.fromTo("#intro", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0)
   .fromTo("#intro .marca", { y: 18, scale: 0.97 }, { y: 0, scale: 1, duration: 0.9 }, 0)
   .fromTo("#intro .lema", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.6 }, 0.35)
   .to("#intro", { opacity: 0, duration: 0.4, ease: "power1.in" }, 1.6)
-// 2–10 s: celular 1 con Señal (escenario): camina, rojo, cae, quietud
-  .fromTo("#cel1", { opacity: 0, y: 40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.6 }, 1.75)
-// 10–17 s: Emergencia (cuenta ×1 y luego ×10) y "Avisando a tu familia"
-  .to("#app-emergencia", { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 10.0)
-  .fromTo("#acelerado", { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.35 }, CUENTA.acelera - 0.2)
-  .to("#acelerado", { opacity: 0, duration: 0.3, ease: "power1.in" }, CERO + 0.1)
-// 17–20 s: entra el celular 2 (Familia) con la notificación
-  .to("#cel1", { x: -270, duration: 0.8, ease: "power3.inOut" }, 17.0)
-  .fromTo("#cel2", { opacity: 0, x: 220 }, { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, 17.0)
-  .fromTo(["#rot1", "#rot2"], { opacity: 0 }, { opacity: 1, duration: 0.5 }, 17.4)
-  .fromTo("#aviso", { opacity: 0, y: -36, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.4)" }, 17.5)
-// 20–22 s: cierre
-  .to(["#cel1", "#cel2"], { opacity: 0, scale: 0.97, duration: 0.5, ease: "power1.in" }, 20.0)
-  .fromTo("#cierre", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 20.4)
-  .fromTo("#cierre .marca", { y: 14 }, { y: 0, duration: 0.8 }, 20.4)
+// celular 1
+  .fromTo("#cel1", { opacity: 0, y: 40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.6 }, 1.75);
+E.linea(tl);
+// entra el celular 2 (Familia) con la notificación genérica de AURA
+tl.to("#cel1", { x: -270, duration: 0.8, ease: "power3.inOut" }, E.familia)
+  .fromTo("#cel2", { opacity: 0, x: 220 }, { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, E.familia)
+  .fromTo(["#rot1", "#rot2"], { opacity: 0 }, { opacity: 1, duration: 0.5 }, E.familia + 0.4)
+  .fromTo("#aviso", { opacity: 0, y: -36, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.4)" }, E.aviso)
+// cierre
+  .to(["#cel1", "#cel2"], { opacity: 0, scale: 0.97, duration: 0.5, ease: "power1.in" }, E.fin)
+  .fromTo("#cierre", { opacity: 0 }, { opacity: 1, duration: 0.6 }, E.fin + 0.4)
+  .fromTo("#cierre .marca", { y: 14 }, { y: 0, duration: 0.8 }, E.fin + 0.4)
   .set({}, {}, DURACION);
 
 // ---------- iframes del mockup ----------
-const appSenal = $("#app-senal"), appEmergencia = $("#app-emergencia");
 const esperar = async (cond, ms = 30000) => {
   const fin = performance.now() + ms;
   while (!cond()) { if (performance.now() > fin) throw new Error("tiempo agotado esperando el mockup"); await new Promise((r) => setTimeout(r, 50)); }
 };
-const aura = (f) => f.contentWindow?.__aura;
+const app = {};
 async function listo() {
   await document.fonts.ready;
-  for (const [f, id] of [[appSenal, "senal"], [appEmergencia, "emergencia"]])
-    await esperar(() => aura(f) && f.contentDocument.body.dataset.pantalla === id && aura(f).cuadro);
-  const escena = () => appSenal.contentDocument.querySelector("iframe.holograma")?.contentWindow?.AURA_ESCENA;
-  await esperar(() => escena()?.senal);
-  await escena().listo;
+  for (const [k, f] of marcos.entries()) {
+    const id = E.pantallas[k];
+    await esperar(() => f.contentWindow?.__aura?.cuadro && f.contentDocument.body.dataset.pantalla === id);
+    app[id] = f.contentWindow.__aura;
+    const escena = () => f.contentDocument.querySelector("iframe.holograma")?.contentWindow?.AURA_ESCENA;
+    if (f.contentDocument.querySelector("iframe.holograma")) { await esperar(() => escena()?.fijar); await escena().listo; }
+  }
   await new Promise((r) => setTimeout(r, 1500));           // fin de las transiciones de entrada del mockup
-  aura(appSenal).congelar(); aura(appEmergencia).congelar();
-  await Promise.all([appSenal, appEmergencia].map((f) => f.contentDocument.fonts.ready));
+  Object.values(app).forEach((a) => a.congelar());
+  await Promise.all(marcos.map((f) => f.contentDocument.fonts.ready));
+  E.preparar?.(app);
   return true;
 }
 window.__listo = listo();
@@ -176,15 +260,10 @@ window.__listo = listo();
 // Un cuadro: la línea de tiempo en t y cada iframe dibujado en el mismo t (sincrónico, determinista)
 window.__setTime = (t) => {
   tl.time(Math.max(0, Math.min(DURACION, t)));
-  let ok = true;
-  if (t >= 1.7 && t < 10.5) ok = aura(appSenal).cuadro(t) && ok;
-  if (t >= 9.9) {
-    const r = restante(t);
-    ok = aura(appEmergencia).cuadro(t, { restante: r, avisando: t >= CERO ? t - CERO : null }) && ok;
-  }
-  return ok;
+  return E.sincronizar(t, app);
 };
-window.__escenario = { DURACION, CERO, restante };
+window.__escenario = { NOMBRE, DURACION, CERO: NOMBRE === "caida_video" ? CERO : null, fin: E.fin, familia: E.familia, aviso: E.aviso,
+  pantallas: E.pantallas, texto: E.texto, cierre: E.cierre, toques: NOMBRE === "bienestar_video" ? TOQUES : null };
 </script>
 </body>
 </html>

@@ -36,10 +36,16 @@
 //                 carga K002 ni se mezcla con sus datos. La caminata, la señal y la caída son sintéticas (guion); la
 //                 caída usa el clip "Death" del mismo modelo CC0, más lento. El video fija el tiempo con
 //                 AURA_ESCENA.fijar(t) (cuadro a cuadro, determinista) y la app lee la señal con AURA_ESCENA.senal(t).
+//   ?modo=senal&escenario=bienestar_video  ESCENARIO SIMULADO de la noche (mismo video, otro guion): sala en penumbra,
+//                 cama hecha con primitivas, figura dormida de lado (pose fijada rotando huesos del mismo esqueleto) y
+//                 baldosas en azul tenue con 2 pulsos breves (AURA_ESCENA.noche.pulsos), cada uno con un movimiento leve
+//                 de la figura. Tampoco carga K002. Sin zonas: la cabeza no se colorea.
 // Modelo: "Animated Human" de Quaternius, CC0 (poly.pizza/m/c3Ibh9I3udk).
 const P = new URLSearchParams(location.search);
 const MODO = ["gemelo", "instalacion"].includes(P.get("modo")) ? P.get("modo") : "senal";
-const ESC_VIDEO = MODO === "senal" && P.get("escenario") === "caida_video";
+const ESC = MODO === "senal" ? P.get("escenario") : null;
+const ESC_VIDEO = ESC === "caida_video", ESC_NOCHE = ESC === "bienestar_video";
+const FIJO = ESC_VIDEO || ESC_NOCHE;                  // escenarios del video: tiempo fijado por el video, sin K002
 const REDUCIDO = matchMedia("(prefers-reduced-motion: reduce)");
 let D = null;                                         // datos reales de K002 (solo modo señal)
 
@@ -128,15 +134,68 @@ function senalVideo(t) {
   return { t, suave, entrada: 1, mov: suave > 1, rojo: suaveEntre(0.9, 1.1, suave), intenso: rampa((suave - 1.6) / 1.0) };
 }
 
+// ---------- escenario simulado "bienestar_video": la noche (guion del video, nada viene del WiFi ni de K002) ----------
+const CAMA = { x: 0.1, z: -0.8, largo: 2.0, ancho: 0.95, alto: 0.44 };   // alto = cara superior del colchón
+CAMA.xAlmohada = CAMA.x - CAMA.largo / 2 + 0.28;
+const PULSOS = [3.4, 5.4];                            // 2 momentos breves de movimiento durante la noche (s del video)
+const pulsoNoche = (t) => Math.max(...PULSOS.map((c) => Math.exp(-(((t - c) / 0.25) ** 2))));
+// Pose dormida DE LADO, mirando a la cámara (el modelo no la trae): se parte de la pose de reposo del clip "Idle"
+// (t = 0, fija) y se rotan huesos del mismo esqueleto: [x, y, z] en grados, en el eje local de cada hueso.
+// Rodillas un poco flexionadas, brazos recogidos delante del pecho, cabeza apenas inclinada. Sin respiración.
+const POSE_DORMIR = {
+  Spine: [12, 0, 0], Spine1: [8, 0, 0], Neck: [12, 0, 0], Head: [6, 0, 0],
+  LeftUpLeg: [34, 0, 0], RightUpLeg: [26, 0, 0], LeftLeg: [-44, 0, 0], RightLeg: [-36, 0, 0],   // cadera +X, rodilla −X
+  LeftArm: [0, 0, 52], RightArm: [0, 0, -52], LeftForeArm: [0, 0, 86], RightForeArm: [0, 0, -86],   // izquierdo +Z, derecho −Z
+};
+// Dos movimientos leves, uno por pulso, con transición suave de 0,6 s; después la pose queda como quedó
+const MOVIMIENTOS = [
+  { c: PULSOS[0], huesos: { LeftUpLeg: [12, 0, 0], LeftLeg: [-14, 0, 0], RightLeg: [-6, 0, 0] } },   // acomoda las piernas
+  { c: PULSOS[1], huesos: { LeftArm: [0, 0, 22], LeftForeArm: [0, 0, -34] } },                     // acomoda el brazo
+];
+const ACOSTADA = { rotX: -0.3, rotZ: Math.PI / 2 };   // de lado (cabeza hacia la cabecera, -x), girada hacia la cámara alta
+let huesosFig = null, reposo = null, posCama = null, giroCama = null;
+const qTmp = new THREE.Quaternion(), eTmp = new THREE.Euler();
+// El mezclador solo reescribe un hueso si su valor cambia: la pose de reposo se toma UNA vez y cada cuadro parte de
+// ella (si no, las rotaciones se acumularían). En la noche no se vuelve a llamar al mezclador.
+function tomarReposo() {
+  accCaminar.setEffectiveWeight(0); accCaida.setEffectiveWeight(0); accQuieto.setEffectiveWeight(1);
+  accQuieto.time = 0; mezclador.update(0);
+  huesosFig = {}; reposo = {};
+  figura.traverse((o) => { if (o.isBone) { huesosFig[o.name] = o; reposo[o.name] = o.quaternion.clone(); } });
+}
+function posarDormida(t) {
+  if (!reposo) tomarReposo();
+  const pesos = MOVIMIENTOS.map((m) => suaveEntre(m.c - 0.3, m.c + 0.3, t));
+  for (const [n, base] of Object.entries(POSE_DORMIR)) {
+    const e = base.slice();
+    MOVIMIENTOS.forEach((m, k) => { const d = m.huesos[n]; if (d) for (let i = 0; i < 3; i++) e[i] += d[i] * pesos[k]; });
+    huesosFig[n].quaternion.copy(reposo[n]).multiply(qTmp.setFromEuler(eTmp.set(...e.map((g) => THREE.MathUtils.degToRad(g)))));
+  }
+}
+// La cabeza sobre la almohada, junto a la cabecera; el cuerpo apoyado sobre el colchón (se calcula una vez)
+function colocarEnCama() {
+  posarDormida(0);
+  const v = (n) => huesosFig[n].getWorldPosition(new THREE.Vector3());
+  figura.position.set(0, 0, 0); figura.rotation.set(ACOSTADA.rotX, 0, ACOSTADA.rotZ); figura.updateMatrixWorld(true);
+  // el reposo de "Idle" viene algo girado: se alinea caderas → cabeza con el largo de la cama (-x)
+  const dir = v("Head").sub(v("Hips"));
+  const giro = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2 - Math.atan2(dir.x, dir.z));
+  giroCama = giro.multiply(figura.quaternion.clone());
+  figura.quaternion.copy(giroCama); figura.updateMatrixWorld(true);
+  const cabeza = v("Head"), bajo = Math.min(...["Hips", "Spine1", "RightShoulder", "RightUpLeg", "RightLeg", "RightFoot", "LeftShoulder", "LeftUpLeg"].map((n) => v(n).y));
+  posCama = new THREE.Vector3(CAMA.xAlmohada - cabeza.x, CAMA.alto + 0.06 - bajo, CAMA.z - cabeza.z);
+  figura.position.copy(posCama);
+}
+
 // ---------- escena ----------
 const gl = document.getElementById("gl");
-const renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: ESC_VIDEO });
+const renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: FIJO });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.setClearColor(0x05080f, 1);
 const escena = new THREE.Scene();
 const camara = new THREE.PerspectiveCamera(36, 1, 0.1, 40);
-escena.add(new THREE.HemisphereLight(0x6f8cff, 0x05080f, 0.6));
-const luz = new THREE.DirectionalLight(0xffffff, 0.5); luz.position.set(2, 4, 3); escena.add(luz);
+const cielo = new THREE.HemisphereLight(0x6f8cff, 0x05080f, ESC_NOCHE ? 0.22 : 0.6); escena.add(cielo);   // noche: penumbra
+const luz = new THREE.DirectionalLight(ESC_NOCHE ? 0x8aa0ff : 0xffffff, ESC_NOCHE ? 0.16 : 0.5); luz.position.set(2, 4, 3); escena.add(luz);
 
 const VISTA = {
   senal: { dist: 5.6, incl: 40, az: -16, mira: new THREE.Vector3(0, 0.55, 0.0), hfov: 48 },
@@ -145,6 +204,7 @@ const VISTA = {
 }[MODO];
 // escenario del video: más cerca, para que la caminata y la caída se lean en la tarjeta del celular
 if (ESC_VIDEO) Object.assign(VISTA, { dist: 4.3, incl: 30, az: -14, mira: new THREE.Vector3(0.35, 0.45, -0.05), hfov: 52 });
+if (ESC_NOCHE) Object.assign(VISTA, { dist: 3.7, incl: 52, az: -20, mira: new THREE.Vector3(0.05, 0.25, -0.4), hfov: 56 });
 function ponerCamara(azGrados) {
   const a = THREE.MathUtils.degToRad(azGrados), e = THREE.MathUtils.degToRad(VISTA.incl);
   camara.position.set(VISTA.mira.x + VISTA.dist * Math.cos(e) * Math.sin(a), VISTA.mira.y + VISTA.dist * Math.sin(e),
@@ -159,6 +219,7 @@ const COLOR_FIG = new THREE.Color(MODO === "gemelo" ? 0x5cc8d6 : 0x3dffc0);
 const FRESNEL = MODO === "gemelo"
   ? { opacidad: 0.85, exp: 1.8, relleno: 0.42, brillo: 2.8, alfaRelleno: 0.2, alfaBorde: 1.0 }
   : ESC_VIDEO ? { opacidad: 0.9, exp: 1.9, relleno: 0.45, brillo: 2.6, alfaRelleno: 0.2, alfaBorde: 1.0 }   // figura bien visible
+  : ESC_NOCHE ? { opacidad: 0.8, exp: 2.0, relleno: 0.3, brillo: 1.9, alfaRelleno: 0.14, alfaBorde: 0.9 }   // penumbra
   : { opacidad: 0.6, exp: 2.4, relleno: 0.22, brillo: 1.4, alfaRelleno: 0.05, alfaBorde: 0.7 };
 const matHolo = new THREE.ShaderMaterial({
   skinning: true, transparent: true, depthWrite: false, side: THREE.FrontSide,
@@ -271,10 +332,12 @@ if (MODO === "senal") {
   baldosas = piso(40, 34, -0.6, 0x0b1a16);
   equipo(HUAWEI, 0x4f7dff, [0.22, 0.16, 0.16]);
   equipo(PLACA, 0x2fe08a, [0.10, 0.04, 0.06]);
-  equipo(new THREE.Vector3(0.45, 1.0, -1.15), 0xd9a441, [0.08, 0.012, 0.16], false);
-  const cama = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 1.1), new THREE.MeshStandardMaterial({ color: 0x10151f }));
-  cama.position.set(0.3, 0.25, -1.75); escena.add(cama);
-  escena.add(new THREE.LineSegments(new THREE.EdgesGeometry(cama.geometry), new THREE.LineBasicMaterial({ color: 0x2a3550 })).translateX(0.3).translateY(0.25).translateZ(-1.75));
+  if (!ESC_NOCHE) {
+    equipo(new THREE.Vector3(0.45, 1.0, -1.15), 0xd9a441, [0.08, 0.012, 0.16], false);
+    const cama = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 1.1), new THREE.MeshStandardMaterial({ color: 0x10151f }));
+    cama.position.set(0.3, 0.25, -1.75); escena.add(cama);
+    escena.add(new THREE.LineSegments(new THREE.EdgesGeometry(cama.geometry), new THREE.LineBasicMaterial({ color: 0x2a3550 })).translateX(0.3).translateY(0.25).translateZ(-1.75));
+  }
   haz = new THREE.Line(new THREE.BufferGeometry().setFromPoints([HUAWEI, PLACA]),
                        new THREE.LineDashedMaterial({ color: 0x6fa8ff, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: 0.6 }));
   haz.computeLineDistances(); escena.add(haz);
@@ -301,10 +364,37 @@ if (MODO === "senal") {
   }
   const matMarca = new THREE.MeshBasicMaterial({ color: 0xaab6cc, transparent: true, opacity: 0.5, depthWrite: false });
   const plano = (w, h, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matMarca); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.008, z); escena.add(m); };
-  const anillo = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.195, 40), matMarca);
-  anillo.rotation.x = -Math.PI / 2; anillo.position.set(PASO_X, 0.008, PUNTO1_Z); escena.add(anillo);
-  plano(0.5, 0.025, PASO_X, PUNTO1_Z); plano(0.025, 0.5, PASO_X, PUNTO1_Z);
-  plano(0.6, 0.03, PASO_X, VUELTA_Z); plano(0.03, 0.14, PASO_X - 0.3, VUELTA_Z); plano(0.03, 0.14, PASO_X + 0.3, VUELTA_Z);
+  if (!ESC_NOCHE) {
+    const anillo = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.195, 40), matMarca);
+    anillo.rotation.x = -Math.PI / 2; anillo.position.set(PASO_X, 0.008, PUNTO1_Z); escena.add(anillo);
+    plano(0.5, 0.025, PASO_X, PUNTO1_Z); plano(0.025, 0.5, PASO_X, PUNTO1_Z);
+    plano(0.6, 0.03, PASO_X, VUELTA_Z); plano(0.03, 0.14, PASO_X - 0.3, VUELTA_Z); plano(0.03, 0.14, PASO_X + 0.3, VUELTA_Z);
+  } else {
+    escena.fog.density = 0.1;
+    // Cama simple con primitivas (sin modelos nuevos): base, colchón, cabecera, almohada y frazada sobre los pies.
+    // La cabecera queda hacia -x; el enlace pasa por delante, sobre las baldosas.
+    const caja = (w, h, d, x, y, z, color, borde) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, emissive: 0x0a1830, emissiveIntensity: 0.25 }));
+      m.position.set(x, y, z); escena.add(m);
+      if (borde) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: borde, transparent: true, opacity: 0.55 })); l.position.copy(m.position); escena.add(l); }
+      return m;
+    };
+    const { x, z, largo, ancho } = CAMA;
+    caja(largo, 0.28, ancho, x, 0.14, z, 0x0d1320, 0x2a3a5a);
+    caja(largo - 0.08, 0.16, ancho - 0.06, x, 0.36, z, 0x141c2b, 0x324466);
+    caja(0.06, 0.78, ancho, x - largo / 2 - 0.03, 0.39, z, 0x0f1726, 0x2a3a5a);
+    const almohada = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshStandardMaterial({ color: 0x1c2638, emissive: 0x0a1830, emissiveIntensity: 0.3 }));
+    almohada.scale.set(0.2, 0.06, 0.34); almohada.position.set(CAMA.xAlmohada, CAMA.alto + 0.03, z); escena.add(almohada);
+    // frazada hasta el hombro: media bóveda translúcida sobre el cuerpo (se ven debajo los dos movimientos leves)
+    const desde = CAMA.xAlmohada + 0.24, largoFrazada = x + largo / 2 - desde;
+    const frazada = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, largoFrazada, 28, 1, false, Math.PI, Math.PI),
+      new THREE.MeshStandardMaterial({ color: 0x1a2742, emissive: 0x0c1c38, emissiveIntensity: 0.45, transparent: true, opacity: 0.55,
+        depthWrite: false, side: THREE.DoubleSide }));
+    frazada.rotation.z = -Math.PI / 2; frazada.scale.set(0.27, 1, ancho / 2 + 0.02);
+    frazada.position.set(desde + largoFrazada / 2, CAMA.alto, z); frazada.renderOrder = 3; escena.add(frazada);
+    const bordeFrazada = new THREE.LineSegments(new THREE.EdgesGeometry(frazada.geometry, 30), new THREE.LineBasicMaterial({ color: 0x4a64a0, transparent: true, opacity: 0.6 }));
+    bordeFrazada.rotation.copy(frazada.rotation); bordeFrazada.scale.copy(frazada.scale); bordeFrazada.position.copy(frazada.position); escena.add(bordeFrazada);
+  }
 }
 
 // ---------- modo gemelo: zonas de órganos dentro del holograma, piso y línea de escaneo ----------
@@ -414,7 +504,8 @@ const cargaFigura = MODO === "instalacion" ? Promise.resolve() : new Promise((ok
     const clip = (nombre) => g.animations.find((a) => a.name.endsWith("|" + nombre));
     accCaminar = mezclador.clipAction(clip("Walk")); accQuieto = mezclador.clipAction(clip("Idle"));
     accCaminar.play(); accQuieto.play();
-    if (ESC_VIDEO) { accCaida = mezclador.clipAction(clip("Death")); accCaida.play(); accCaida.setEffectiveWeight(0); }
+    if (FIJO) { accCaida = mezclador.clipAction(clip("Death")); accCaida.play(); accCaida.setEffectiveWeight(0); }
+    if (ESC_NOCHE) colocarEnCama();
     ok();
   }, undefined, mal);
 });
@@ -450,10 +541,29 @@ ajustar();
 
 // ---------- animación ----------
 const COL_BASE = new THREE.Color(0x0b1a16), COL_MOV = new THREE.Color(0xff3b2f), COL_QUIETO = new THREE.Color(0x1e8cff);
-const COL_BORDE_MOV = new THREE.Color(0xff4a3d), COL_HAZ_QUIETO = new THREE.Color(0x6fa8ff);
+const COL_BORDE_MOV = new THREE.Color(0xff4a3d), COL_HAZ_QUIETO = new THREE.Color(0x6fa8ff), COL_PISO_NOCHE = new THREE.Color(0x060c0b);
+// Noche (escenario simulado): penumbra, baldosas del enlace en azul tenue y 2 pulsos breves; nunca rojo ni zonas
+function actualizarNoche(t) {
+  ponerCamara(VISTA.az + 5 * Math.sin(t * 2 * Math.PI / 40));
+  const p = pulsoNoche(t);
+  tmpCol.copy(COL_BASE).lerp(COL_QUIETO, 0.12 + 0.5 * p);
+  for (let k = 0; k < enLinea.length; k++) baldosas.setColorAt(k, enLinea[k] ? tmpCol : COL_PISO_NOCHE);
+  baldosas.instanceColor.needsUpdate = true;
+  haz.material.color.copy(COL_HAZ_QUIETO); haz.material.opacity = 0.25 + 0.4 * p;
+  tubo.material.opacity = 0; ondasRojas.forEach((o) => { o.userData.mat.opacity = 0; });
+  cupulas.forEach((m, k) => { const r = 0.35 + ((t * 0.4 + k * 1.1) % 3.3); m.scale.setScalar(r); m.material.opacity = 0.1 * (1 - r / 3.65); });
+  matHolo.uniforms.borde.value.copy(COLOR_FIG); matHolo.uniforms.suelo.value = 1;
+  bloom.strength = 0.45 + 0.3 * p;
+  halo.material.opacity = 0; particulas.material.opacity = 0; estela.forEach((e) => { e.material.opacity = 0; });
+  if (mezclador && posCama) {                           // quieta entre pulsos: solo cambia en los dos movimientos
+    figura.position.copy(posCama); figura.quaternion.copy(giroCama);
+    posarDormida(t);
+  }
+}
 const tmpCol = new THREE.Color(), tmpCol2 = new THREE.Color();
 let cuadros = 0, fpsMedido = 0, ultimoFps = performance.now();
 function actualizar(ahora) {
+  if (ESC_NOCHE) { actualizarNoche(tActual()); compositor.render(); return; }
   const reducido = REDUCIDO.matches;
   if (MODO === "senal") {
     const t = tActual();
@@ -538,16 +648,20 @@ function bucle(ahora) {
 }
 
 // Interfaz mínima para la app y las pruebas
-window.AURA_ESCENA = { modo: MODO, escenario: ESC_VIDEO ? "caida_video" : null, fps: () => fpsMedido,
+window.AURA_ESCENA = { modo: MODO, escenario: FIJO ? ESC : null, fps: () => fpsMedido,
   // video (escenario simulado): fija el tiempo y dibuja ese cuadro ya, sin bucle (determinista)
   fijar: (t) => { pausado = true; tFijo = t; actualizar(performance.now()); return true; },
-  senal: ESC_VIDEO ? senalVideo : null, pausado: () => pausado, reducido: () => REDUCIDO.matches, listo: cargaFigura,
+  senal: ESC_VIDEO ? senalVideo : null,
+  noche: ESC_NOCHE ? { pulsos: PULSOS.slice(), pulso: pulsoNoche,
+    // huella de la pose (huesos rotados + posición): para comprobar que entre pulsos la figura queda totalmente quieta
+    pose: () => (posCama ? [figura.position, figura.quaternion, ...Object.keys(POSE_DORMIR).map((n) => huesosFig[n].quaternion)]
+      .map((q) => q.toArray().map((v) => v.toFixed(5)).join(",")).join(";") : null) } : null, pausado: () => pausado, reducido: () => REDUCIDO.matches, listo: cargaFigura,
   // fracción del alto del lienzo que ocupa la figura de 1,70 m (gemelo)
   alturaFigura: () => { const a = new THREE.Vector3(0, 0, 0).project(camara), b = new THREE.Vector3(0, 1.7, 0).project(camara); return Math.round((b.y - a.y) / 2 * 100) / 100; },
   efectos: () => ({ rojo:Math.round(rojo * 100) / 100, bloom: Math.round(bloom.strength * 100) / 100, escaneo: Math.round(matHolo.uniforms.escOn.value * 100) / 100 }),
   zonas: () => Object.fromEntries(Object.entries(zonas).map(([id, z]) => [id, { op: Math.round(z.op * 100) / 100, dibujo: Math.round(z.sprites[0].material.opacity * 100) / 100, color: "#" + z.color.getHexString() }])) };
 
-const datos = MODO === "senal" && !ESC_VIDEO
+const datos = MODO === "senal" && !FIJO
   ? fetch("../datos/k002_reproduccion.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
   : Promise.resolve(null);
 Promise.all([datos, cargaFigura.catch((e) => { console.error("modelo", e); })]).then(([d]) => {

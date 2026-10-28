@@ -5,7 +5,7 @@ import { el } from "./ui.js";
 import { ESCENARIO_VIDEO } from "../data/video.js";
 
 export function crearHolograma(modo, titulo, { alTocarZona } = {}) {
-  const extra = ESCENARIO_VIDEO && modo === "senal" ? "&escenario=caida_video" : "";   // escenario simulado del video
+  const extra = ESCENARIO_VIDEO && modo === "senal" ? `&escenario=${ESCENARIO_VIDEO}` : "";   // escenario simulado del video
   const iframe = el("iframe", { class: "holograma", src: `holograma/index.html?modo=${modo}${extra}`, title: titulo, loading: "eager" });
   let listo = false;
   const pendientes = [];

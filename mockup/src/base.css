@@ -275,3 +275,17 @@ body[data-pantalla="emergencia"] .barra-sup { background: var(--emergencia-bg); 
 @media (min-width: 431px) {
   #app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 }
+
+/* ---------- video de demostración: escenario simulado "bienestar_video" (solo con ?escenario=) ---------- */
+.barras-semana { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--e2); height: 128px; }
+.barra-pista { position: relative; }
+.barra-dia { position: absolute; inset: 0 22%; border-radius: 6px; background: var(--primary); transform-origin: 50% 100%; transform: scaleY(0); }
+.barra-dia.menos { background: var(--warn); }
+.costumbre { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(148, 163, 184, 0.5); }
+.dias-semana { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font: var(--pequeno); color: var(--text-2); }
+.linea-svg .noche-avance { fill: rgba(92, 200, 214, 0.16); }
+.linea-svg .cursor-noche { stroke: var(--text-2); stroke-width: 1.5; }
+.opciones-video { display: flex; gap: var(--e2); flex-wrap: wrap; }
+.opciones-video.columna { flex-direction: column; }
+.boton.elegido { border-color: var(--primary); background: var(--tinte-primary); }
+

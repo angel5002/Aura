@@ -162,3 +162,16 @@ Para el video del hackathon se agregó un modo `?escenario=caida_video`, que sol
 - **Cómo se renderiza:** cuadro a cuadro, con tiempo determinista. Se usan Playwright y ffmpeg, ya instalados.
 - **Qué NO se puede afirmar con él:** que AURA detecte caídas ni que capte la postura. La figura es ilustrativa.
 - **Fuera de ese modo,** la app y sus 10 criterios no cambian.
+
+## Actualización 2026-10-28: segundo escenario del video (`bienestar_video`)
+Mismo sistema que `caida_video`, con un parámetro en `escenario.html` y `renderizar.mjs`. Todo es sintético (sin K002 ni
+/ws). Se ve con el rótulo fijo "Escenario de demostración" y el cierre "Escenario de demostración · funciones en
+desarrollo".
+- **Nota: el video no demuestra monitoreo del sueño, de la rutina ni del estado emocional.**
+- **Orden obligatorio:** primero se pregunta a la persona; la familia solo recibe lo que ella elige.
+- **Lo que no se hace:**
+  - no aparece el Gemelo y no se colorea la cabeza;
+  - no se finge respiración: la figura solo se mueve en los dos pulsos.
+- **Palabras vetadas en pantalla:** aislamiento, aislada, depresión, soledad, riesgo emocional, diagnóstico, salud
+  mental, calidad del sueño, sueño profundo, REM, fases y respiraciones/min.
+- **Prueba:** todo lo anterior lo comprueba `mockup/pruebas/escenarios_video.spec.js`.

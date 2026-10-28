@@ -196,3 +196,26 @@ Revisión visual de las capturas y cambios hechos:
   - "Familia avisada (simulación)" al final;
   - rojo solo dentro de la zona de baldosas;
   - notificación sin el prefijo "AURA:".
+
+## Segundo video de demostración (mismo día): `bienestar_video`, ~24 s, escenario simulado
+- **Qué es:**
+  - noche, semana y pregunta del asistente, y luego la familia, con el mismo sistema que el video de la caída;
+  - todo es sintético: no carga K002 ni /ws;
+  - **no demuestra monitoreo del sueño, de la rutina ni del estado emocional.**
+- **Código:**
+  - `video/escenario.html` y `video/renderizar.mjs` toman `?escenario=` / `--escenario`. El servidor local pasó a
+    `video/servidor.mjs`.
+  - En la app, solo con `?escenario=bienestar_video`: la pantalla "Tu noche" (`src/screens/noche.js`, no es una de las
+    9), la semana en Hoy y la pregunta en Asistente.
+  - En el holograma: cama de primitivas, penumbra, 2 pulsos azules y la figura dormida de lado.
+- **Pose:**
+  - se descartó la pose final de "Death" (decisión de Deisy: se leía como alguien desplomado);
+  - en su lugar, una pose fijada rotando huesos del mismo esqueleto, sin modelos nuevos;
+  - 2 movimientos leves sincronizados con los pulsos, y quieta entre ellos.
+- **Decisiones de Deisy:**
+  - la pestaña "Gemelo" se queda en la barra;
+  - las horas de los relojes están bien;
+  - se quedan el segundo toque y "Le aviso a tu familia que quieres conversar.".
+- **Resultados (medido):**
+  - todas las pruebas aprobadas: 15 del mockup y 2 nuevas de honestidad de los escenarios del video;
+  - MP4 de 24,0 s, 1440 cuadros, yuv420p y 2,1 MB, fuera de git.
