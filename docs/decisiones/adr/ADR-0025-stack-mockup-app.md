@@ -151,3 +151,14 @@ del punto 2 de la decisión. Lo demás del stack no cambia.
 - La prueba 2 ("sin internet con fuentes locales") ahora comprueba que carguen IBM Plex Sans 400 y 600 e IBM Plex Mono
   500 desde localhost, en vez de Inter. El criterio no cambia.
 
+## Actualización 2026-10-28: video de demostración con un escenario simulado
+Para el video del hackathon se agregó un modo `?escenario=caida_video`, que solo usa `mockup/video/escenario.html`.
+- **Qué muestra:** una caída sintética. Señal, caminata y caída son de guion. No se mezclan con K002: en ese modo la app
+  no carga la reproducción.
+- **Rótulos:**
+  - "Escenario de demostración" fijo durante todo el video;
+  - "DEMO · escenario" en la cabecera;
+  - "señal simulada" en el panel.
+- **Cómo se renderiza:** cuadro a cuadro, con tiempo determinista. Se usan Playwright y ffmpeg, ya instalados.
+- **Qué NO se puede afirmar con él:** que AURA detecte caídas ni que capte la postura. La figura es ilustrativa.
+- **Fuera de ese modo,** la app y sus 10 criterios no cambian.

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>AURA · escenario de demostración (video)</title>
+<!--
+  escenario.html — animación corta (~22 s, 1920 × 1080) para el video, con el mockup actual (iteración 4).
+  ESCENARIO SIMULADO: la señal, la caminata y la caída de la figura son sintéticas (escenario "caida_video" del
+  holograma) y NO se mezclan con datos de K002 (K002 no tiene caídas). La figura es ilustrativa: AURA no capta la
+  postura; la caída es parte del guion, no del WiFi. Marcos de celular genéricos; la notificación es de AURA, genérica.
+  Una sola línea de tiempo GSAP (en pausa) controla todo: window.__setTime(t) la lleva a t y dibuja ese cuadro en los
+  iframes del mockup (tiempo determinista). Lo renderiza video/renderizar.mjs cuadro a cuadro con Playwright y ffmpeg.
+  Se sirve desde mockup/ (necesita app/ compilada: npm run build).
+-->
+<link rel="stylesheet" href="../node_modules/@fontsource/ibm-plex-sans/latin-400.css">
+<link rel="stylesheet" href="../node_modules/@fontsource/ibm-plex-sans/latin-500.css">
+<link rel="stylesheet" href="../node_modules/@fontsource/ibm-plex-sans/latin-600.css">
+<link rel="stylesheet" href="../node_modules/@fontsource/ibm-plex-mono/latin-500.css">
+<style>
+  :root {
+    --bg: #05080f; --surface: #0c1a26; --text: #f1f5f9; --text-2: #94a3b8; --primary: #5cc8d6; --danger: #f07a6a;
+    --fuente: "IBM Plex Sans", system-ui, sans-serif; --fuente-mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  html, body { margin: 0; }
+  body { width: 1920px; height: 1080px; overflow: hidden; position: relative; font-family: var(--fuente); color: var(--text);
+    background: radial-gradient(1200px 800px at 50% 45%, #0b1724 0%, var(--bg) 70%); }
+  .cuadricula { position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(92,200,214,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(92,200,214,.035) 1px, transparent 1px);
+    background-size: 48px 48px; }
+
+  /* intro y cierre */
+  .portada { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; opacity: 0; }
+  .marca { font: 600 132px/1 var(--fuente); letter-spacing: 0.08em; margin: 0; color: #fff; text-shadow: 0 0 60px rgba(92,200,214,.45); }
+  .lema { font: 500 36px/1.2 var(--fuente); color: var(--text-2); margin: 0; }
+
+  /* celular genérico: esquinas redondeadas e isla superior, sin marca */
+  .celular { position: absolute; left: 960px; top: 540px; width: 418px; height: 916px; margin: -458px 0 0 -209px;
+    border-radius: 66px; background: #0d1117; box-shadow: 0 0 0 2px #2a3342, 0 0 0 9px #0a0d13, 0 40px 90px rgba(0,0,0,.65); opacity: 0; }
+  .vidrio { position: absolute; inset: 14px; border-radius: 52px; overflow: hidden; background: var(--bg); }
+  .isla { position: absolute; top: 11px; left: 50%; width: 112px; height: 32px; margin-left: -56px; border-radius: 16px; background: #000; z-index: 3; }
+  .barra-estado { position: absolute; top: 0; left: 0; right: 0; height: 44px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 30px 0 34px; font: 600 15px/1 var(--fuente); color: var(--text); z-index: 2; }
+  .iconos { display: flex; align-items: center; gap: 6px; }
+  .barras { display: flex; align-items: flex-end; gap: 2px; height: 11px; }
+  .barras i { display: block; width: 3px; background: var(--text); border-radius: 1px; }
+  .bateria { width: 22px; height: 11px; border: 1.5px solid rgba(241,245,249,.7); border-radius: 3px; padding: 1.5px; box-sizing: border-box; }
+  .bateria i { display: block; height: 100%; width: 75%; background: var(--text); border-radius: 1px; }
+  .vidrio iframe { position: absolute; top: 44px; left: 0; width: 390px; height: 844px; border: 0; background: var(--bg); }
+  .rotulo-cel { position: absolute; top: -56px; left: 0; right: 0; text-align: center; font: 600 22px/1 var(--fuente); color: var(--text-2); opacity: 0; }
+
+  /* "×10": la cuenta regresiva va acelerada en el video */
+  .acelerado { position: absolute; top: 300px; left: 448px; display: flex; flex-direction: column; gap: 6px; opacity: 0; }
+  .acelerado b { font: 500 52px/1 var(--fuente-mono); color: var(--danger); }
+  .acelerado span { font: 500 17px/1.2 var(--fuente); color: var(--text-2); white-space: nowrap; }
+
+  /* celular 2: familia (pantalla bloqueada genérica y notificación de AURA) */
+  .fondo-familia { position: absolute; inset: 0;
+    background: radial-gradient(420px 520px at 20% 10%, #12344a 0%, transparent 70%), radial-gradient(480px 560px at 90% 95%, #1c2350 0%, transparent 70%), #070b14; }
+  .hora { position: absolute; top: 118px; left: 0; right: 0; text-align: center; font: 500 88px/1 var(--fuente); letter-spacing: -0.01em; }
+  .fecha { position: absolute; top: 92px; left: 0; right: 0; text-align: center; font: 500 19px/1 var(--fuente); color: rgba(241,245,249,.8); }
+  .aviso { position: absolute; top: 318px; left: 14px; right: 14px; padding: 14px 16px 16px; border-radius: 24px;
+    background: rgba(28,38,56,.92); box-shadow: 0 12px 36px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06); opacity: 0; }
+  .aviso-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .icono-app { width: 30px; height: 30px; border-radius: 8px; background: #0c1a26; box-shadow: inset 0 0 0 1px rgba(92,200,214,.4);
+    display: grid; place-items: center; font: 600 15px/1 var(--fuente); color: var(--primary); }
+  .aviso-app { font: 600 15px/1 var(--fuente); letter-spacing: 0.06em; }
+  .aviso-cuando { margin-left: auto; font: 400 14px/1 var(--fuente); color: var(--text-2); }
+  .aviso-texto { font: 400 17px/1.4 var(--fuente); margin: 0; }
+
+  /* rótulo fijo y discreto durante todo el video */
+  .rotulo-fijo { position: absolute; left: 40px; bottom: 34px; display: flex; align-items: center; gap: 10px;
+    font: 500 18px/1 var(--fuente); color: var(--text-2); }
+  .rotulo-fijo i { width: 8px; height: 8px; border-radius: 50%; background: #e8b04a; }
+</style>
+</head>
+<body>
+<div class="cuadricula"></div>
+
+<section class="portada" id="intro">
+  <h1 class="marca">AURA</h1>
+  <p class="lema">Señales que cuidan</p>
+</section>
+
+<div class="celular" id="cel1">
+  <p class="rotulo-cel" id="rot1">En casa</p>
+  <div class="vidrio">
+    <div class="isla"></div>
+    <div class="barra-estado"><span>10:24</span><span class="iconos"><span class="barras"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bateria"><i></i></span></span></div>
+    <iframe id="app-senal" title="AURA · Señal (escenario)" src="../app/index.html?escenario=caida_video&quedarse=1#/senal"></iframe>
+    <iframe id="app-emergencia" title="AURA · Emergencia (escenario)" src="../app/index.html?escenario=caida_video&quedarse=1#/emergencia" style="opacity:0"></iframe>
+  </div>
+  <div class="acelerado" id="acelerado"><b>×10</b><span>cuenta acelerada</span></div>
+</div>
+
+<div class="celular" id="cel2" style="left:1230px">
+  <p class="rotulo-cel" id="rot2">Familia</p>
+  <div class="vidrio">
+    <div class="fondo-familia"></div>
+    <div class="isla"></div>
+    <div class="barra-estado"><span></span><span class="iconos"><span class="barras"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:11px"></i></span><span class="bateria"><i></i></span></span></div>
+    <p class="fecha">miércoles, 28 de octubre</p>
+    <p class="hora">10:25</p>
+    <div class="aviso" id="aviso">
+      <div class="aviso-cab"><span class="icono-app">A</span><span class="aviso-app">AURA</span><span class="aviso-cuando">ahora</span></div>
+      <p class="aviso-texto">Posible caída de Rosa en la sala. No responde.</p>
+    </div>
+  </div>
+</div>
+
+<section class="portada" id="cierre">
+  <h1 class="marca">AURA</h1>
+  <p class="lema">Escenario de demostración · prototipo</p>
+</section>
+
+<p class="rotulo-fijo"><i></i>Escenario de demostración</p>
+
+<script type="module">
+import { gsap } from "../node_modules/gsap/index.js";
+
+const DURACION = 22;
+// Cuenta regresiva de Emergencia (45 s): ×1 desde 10,0 s y ×10 desde 12,8 s, así llega a 0:00 en 17,02 s con el
+// rótulo "×10" verdadero (42,2 s de cuenta en 4,22 s de video)
+const CUENTA = { inicio: 10.0, acelera: 12.8, x: 10, total: 45 };
+const CERO = CUENTA.acelera + (CUENTA.total - (CUENTA.acelera - CUENTA.inicio)) / CUENTA.x;
+function restante(t) {
+  if (t < CUENTA.inicio) return CUENTA.total;
+  if (t < CUENTA.acelera) return CUENTA.total - (t - CUENTA.inicio);
+  return Math.max(0, CUENTA.total - (CUENTA.acelera - CUENTA.inicio) - CUENTA.x * (t - CUENTA.acelera));
+}
+
+const $ = (s) => document.querySelector(s);
+const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.out" } });
+// 0–2 s: logo y lema
+tl.fromTo("#intro", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0)
+  .fromTo("#intro .marca", { y: 18, scale: 0.97 }, { y: 0, scale: 1, duration: 0.9 }, 0)
+  .fromTo("#intro .lema", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.6 }, 0.35)
+  .to("#intro", { opacity: 0, duration: 0.4, ease: "power1.in" }, 1.6)
+// 2–10 s: celular 1 con Señal (escenario): camina, rojo, cae, quietud
+  .fromTo("#cel1", { opacity: 0, y: 40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.6 }, 1.75)
+// 10–17 s: Emergencia (cuenta ×1 y luego ×10) y "Avisando a tu familia"
+  .to("#app-emergencia", { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 10.0)
+  .fromTo("#acelerado", { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.35 }, CUENTA.acelera - 0.2)
+  .to("#acelerado", { opacity: 0, duration: 0.3, ease: "power1.in" }, CERO + 0.1)
+// 17–20 s: entra el celular 2 (Familia) con la notificación
+  .to("#cel1", { x: -270, duration: 0.8, ease: "power3.inOut" }, 17.0)
+  .fromTo("#cel2", { opacity: 0, x: 220 }, { opacity: 1, x: 0, duration: 0.8, ease: "power3.out" }, 17.0)
+  .fromTo(["#rot1", "#rot2"], { opacity: 0 }, { opacity: 1, duration: 0.5 }, 17.4)
+  .fromTo("#aviso", { opacity: 0, y: -36, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.4)" }, 17.5)
+// 20–22 s: cierre
+  .to(["#cel1", "#cel2"], { opacity: 0, scale: 0.97, duration: 0.5, ease: "power1.in" }, 20.0)
+  .fromTo("#cierre", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 20.4)
+  .fromTo("#cierre .marca", { y: 14 }, { y: 0, duration: 0.8 }, 20.4)
+  .set({}, {}, DURACION);
+
+// ---------- iframes del mockup ----------
+const appSenal = $("#app-senal"), appEmergencia = $("#app-emergencia");
+const esperar = async (cond, ms = 30000) => {
+  const fin = performance.now() + ms;
+  while (!cond()) { if (performance.now() > fin) throw new Error("tiempo agotado esperando el mockup"); await new Promise((r) => setTimeout(r, 50)); }
+};
+const aura = (f) => f.contentWindow?.__aura;
+async function listo() {
+  await document.fonts.ready;
+  for (const [f, id] of [[appSenal, "senal"], [appEmergencia, "emergencia"]])
+    await esperar(() => aura(f) && f.contentDocument.body.dataset.pantalla === id && aura(f).cuadro);
+  const escena = () => appSenal.contentDocument.querySelector("iframe.holograma")?.contentWindow?.AURA_ESCENA;
+  await esperar(() => escena()?.senal);
+  await escena().listo;
+  await new Promise((r) => setTimeout(r, 1500));           // fin de las transiciones de entrada del mockup
+  aura(appSenal).congelar(); aura(appEmergencia).congelar();
+  await Promise.all([appSenal, appEmergencia].map((f) => f.contentDocument.fonts.ready));
+  return true;
+}
+window.__listo = listo();
+
+// Un cuadro: la línea de tiempo en t y cada iframe dibujado en el mismo t (sincrónico, determinista)
+window.__setTime = (t) => {
+  tl.time(Math.max(0, Math.min(DURACION, t)));
+  let ok = true;
+  if (t >= 1.7 && t < 10.5) ok = aura(appSenal).cuadro(t) && ok;
+  if (t >= 9.9) {
+    const r = restante(t);
+    ok = aura(appEmergencia).cuadro(t, { restante: r, avisando: t >= CERO ? t - CERO : null }) && ok;
+  }
+  return ok;
+};
+window.__escenario = { DURACION, CERO, restante };
+</script>
+</body>
+</html>

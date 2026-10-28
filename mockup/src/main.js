@@ -5,6 +5,7 @@ import "./base.css";
 import { escuchar, estado } from "./estado.js";
 import { iniciarFuente, irA, lanzarEscenario, tK002 } from "./data/fuente.js";
 import { gsap, transicionPantalla } from "./motion.js";
+import { ESCENARIO_VIDEO } from "./data/video.js";
 import { mostrarBanner } from "./components/hoja.js";
 import { abrirAclaraciones } from "./components/aclaraciones.js";
 import { ICONOS, el } from "./components/ui.js";
@@ -57,6 +58,7 @@ addEventListener("hashchange", () => navegar(location.hash.replace("#/", "") || 
 
 // ---------- sello DEMO y reacciones a los datos ----------
 function pintarSello() { sello.hidden = estado.fuente !== "demo"; }
+if (ESCENARIO_VIDEO) sello.textContent = "DEMO · escenario";
 document.getElementById("info").addEventListener("click", () => abrirAclaraciones());
 escuchar((_, p) => {
   if ("fuente" in p) pintarSello();
@@ -68,6 +70,18 @@ pintarSello();
 
 // Interfaz para las pruebas (Playwright) y para window.AURA_HOLO de Angel
 window.__aura = { estado, navegar, lanzarEscenario, irA, tK002, gsap, anillo: null };
+if (ESCENARIO_VIDEO) Object.assign(window.__aura, {
+  // Congela los bucles propios (GSAP en su inicio; animaciones CSS en pausa): desde aquí manda el video
+  congelar() {
+    gsap.globalTimeline.getChildren(true, true, false).forEach((tw) => { if (tw.repeat() === -1) tw.pause(0); });
+    gsap.globalTimeline.pause();
+  },
+  // Un cuadro del video en el tiempo t (s): animaciones CSS (p. ej. el latido) en t y la pantalla actual dibuja t
+  cuadro(t, extra = {}) {
+    document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t * 1000; });
+    return actual?.cuadro?.(t, extra) ?? true;
+  },
+});
 window.AURA_HOLO = { setZona() {}, escanear: () => navegar("gemelo", { escanear: true }) };
 
 // La primera pantalla espera la reproducción K002 (archivo local, ~140 kB); /ws se sigue buscando aparte

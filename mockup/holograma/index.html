@@ -32,16 +32,22 @@
 //                 (lo decide la app); tocar una zona avisa a la app {tipo:"zona_tocada", zona}.
 // Mensajes de la app (postMessage): {tipo:"t", t} · {tipo:"pausa", valor} · {tipo:"zonas", zonas: {id: {color, nivel}}}
 //   · {tipo:"actividad", mov} · {tipo:"escanear"}
+//   ?modo=senal&escenario=caida_video  ESCENARIO SIMULADO del video de demostración (mockup/video/escenario.html): NO
+//                 carga K002 ni se mezcla con sus datos. La caminata, la señal y la caída son sintéticas (guion); la
+//                 caída usa el clip "Death" del mismo modelo CC0, más lento. El video fija el tiempo con
+//                 AURA_ESCENA.fijar(t) (cuadro a cuadro, determinista) y la app lee la señal con AURA_ESCENA.senal(t).
 // Modelo: "Animated Human" de Quaternius, CC0 (poly.pizza/m/c3Ibh9I3udk).
 const P = new URLSearchParams(location.search);
 const MODO = ["gemelo", "instalacion"].includes(P.get("modo")) ? P.get("modo") : "senal";
+const ESC_VIDEO = MODO === "senal" && P.get("escenario") === "caida_video";
 const REDUCIDO = matchMedia("(prefers-reduced-motion: reduce)");
 let D = null;                                         // datos reales de K002 (solo modo señal)
 
 // ---------- reloj: la app manda el t de la reproducción; entre mensajes se interpola ----------
-let tRecibido = null, tRecibidoEn = 0, pausado = false;
+let tRecibido = null, tRecibidoEn = 0, pausado = false, tFijo = null;   // tFijo: tiempo fijado por el video
 const tInicio = performance.now();
 function tActual() {
+  if (tFijo !== null) return tFijo;
   if (tRecibido !== null) return tRecibido + (performance.now() - tRecibidoEn) / 1000;
   return ((performance.now() - tInicio) / 1000) % 330;
 }
@@ -85,9 +91,46 @@ function persona(t) {
   return { z: PUNTO1_Z, camina: null, rumbo: Math.PI, w: 0 };
 }
 
+// ---------- escenario simulado "caida_video" (guion del video; nada de esto viene del WiFi ni de K002) ----------
+// 2,0–6,8 s entra caminando por la derecha, de costado a la cámara; entra en la zona de baldosas a los ~4,8 s;
+// 6,8 s cae (clip "Death": de rodillas y luego tendida, ~2,2 s); después, quietud.
+const CV = { ini: 2.0, fin: 6.8, rampa: 0.45, A: [2.2, 0.2], B: [0.35, -0.1], caida: 6.8, ritmoCaida: 1.1 };
+const ZONA = { x: 1.1, z: 0.4 };                       // borde de las baldosas del enlace (|x| ≤ 1,1 m, |z| ≤ 0,4 m)
+const CV_LARGO = Math.hypot(CV.B[0] - CV.A[0], CV.B[1] - CV.A[1]);
+const suaveEntre = (a, b, x) => { const q = rampa((x - a) / (b - a)); return q * q * (3 - 2 * q); };
+// avance 0..1 con arranque y frenado suaves (rampas de 0,45 s; velocidad constante en medio)
+function avanceCV(t) {
+  const T = CV.fin - CV.ini, r = CV.rampa, v = 1 / (T - r), s = Math.max(0, Math.min(T, t - CV.ini));
+  if (s < r) return { u: v * s * s / (2 * r), vel: v * s / r };
+  if (s > T - r) { const q = T - s; return { u: 1 - v * q * q / (2 * r), vel: v * q / r }; }
+  return { u: v * (s - r / 2), vel: v };
+}
+function personaVideo(t) {
+  const { u, vel } = avanceCV(t), velM = vel * CV_LARGO;      // m/s
+  const x = CV.A[0] + (CV.B[0] - CV.A[0]) * u, z = CV.A[1] + (CV.B[1] - CV.A[1]) * u;
+  const cae = suaveEntre(CV.caida - 0.05, CV.caida + 0.25, t);
+  return { x, z, vel: velM, rumbo: Math.atan2(CV.B[0] - CV.A[0], CV.B[1] - CV.A[1]),
+           camina: u * CV_LARGO * (RITMO / 0.7), w: PESO_MAX * Math.min(1, velM / 0.2), cae,
+           tCaida: Math.max(0, t - CV.caida) * CV.ritmoCaida };
+}
+// Señal sintética (misma escala que el detector: entrada = 1): caminando fuera de la zona de baldosas queda bajo el
+// umbral (azul); al entrar en la zona sube sobre el umbral (rojo); golpe fuerte en la caída y luego quietud.
+// Ruido determinista (sumas de senos) para que cada cuadro sea reproducible.
+function senalVideo(t) {
+  const p = personaVideo(t);
+  const borde = Math.max(Math.abs(p.x) - ZONA.x, Math.abs(p.z) - ZONA.z);   // m respecto del borde (negativo = dentro)
+  const dentro = suaveEntre(0, 0.1, -borde);            // sube solo ya dentro de la zona (0 en el borde y fuera)
+  const ruido = 0.05 * (Math.sin(t * 7.3) + 0.6 * Math.sin(t * 12.9 + 1) + 0.4 * Math.sin(t * 3.1 + 2));
+  const paso = Math.min(1, 0.55 + p.vel / 0.6);
+  const camina = p.vel > 0.02 ? paso * (0.35 + 1.4 * dentro) : 0;   // fuera: ≤ 0,67 (bajo el umbral)
+  const golpe = 2.4 * suaveEntre(6.5, 7.0, t) * (1 - suaveEntre(8.3, 9.1, t));
+  const suave = Math.max(0.05, 0.22 + ruido + camina + golpe);
+  return { t, suave, entrada: 1, mov: suave > 1, rojo: suaveEntre(0.9, 1.1, suave), intenso: rampa((suave - 1.6) / 1.0) };
+}
+
 // ---------- escena ----------
 const gl = document.getElementById("gl");
-const renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: true, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: ESC_VIDEO });
 renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
 renderer.setClearColor(0x05080f, 1);
 const escena = new THREE.Scene();
@@ -100,6 +143,8 @@ const VISTA = {
   gemelo: { dist: 3.62, incl: 7, az: 0, mira: new THREE.Vector3(0, 0.84, 0), vfov: 30 },   // iteración 4: figura ~90 % del alto
   instalacion: { dist: 3.1, incl: 24, az: 0, mira: new THREE.Vector3(0, 0.6, 0), hfov: 56 },
 }[MODO];
+// escenario del video: más cerca, para que la caminata y la caída se lean en la tarjeta del celular
+if (ESC_VIDEO) Object.assign(VISTA, { dist: 4.3, incl: 30, az: -14, mira: new THREE.Vector3(0.35, 0.45, -0.05), hfov: 52 });
 function ponerCamara(azGrados) {
   const a = THREE.MathUtils.degToRad(azGrados), e = THREE.MathUtils.degToRad(VISTA.incl);
   camara.position.set(VISTA.mira.x + VISTA.dist * Math.cos(e) * Math.sin(a), VISTA.mira.y + VISTA.dist * Math.sin(e),
@@ -113,12 +158,13 @@ function ponerCamara(azGrados) {
 const COLOR_FIG = new THREE.Color(MODO === "gemelo" ? 0x5cc8d6 : 0x3dffc0);
 const FRESNEL = MODO === "gemelo"
   ? { opacidad: 0.85, exp: 1.8, relleno: 0.42, brillo: 2.8, alfaRelleno: 0.2, alfaBorde: 1.0 }
+  : ESC_VIDEO ? { opacidad: 0.9, exp: 1.9, relleno: 0.45, brillo: 2.6, alfaRelleno: 0.2, alfaBorde: 1.0 }   // figura bien visible
   : { opacidad: 0.6, exp: 2.4, relleno: 0.22, brillo: 1.4, alfaRelleno: 0.05, alfaBorde: 0.7 };
 const matHolo = new THREE.ShaderMaterial({
   skinning: true, transparent: true, depthWrite: false, side: THREE.FrontSide,
   uniforms: { color: { value: COLOR_FIG.clone() }, borde: { value: COLOR_FIG.clone() }, opacidad: { value: FRESNEL.opacidad },
     exponente: { value: FRESNEL.exp }, relleno: { value: FRESNEL.relleno }, brillo: { value: FRESNEL.brillo },
-    alfaRelleno: { value: FRESNEL.alfaRelleno }, alfaBorde: { value: FRESNEL.alfaBorde }, escY: { value: 0 }, escOn: { value: 0 } },
+    alfaRelleno: { value: FRESNEL.alfaRelleno }, alfaBorde: { value: FRESNEL.alfaBorde }, escY: { value: 0 }, escOn: { value: 0 }, suelo: { value: 0 } },
   vertexShader: `
     #include <common>
     #include <skinning_pars_vertex>
@@ -137,12 +183,12 @@ const matHolo = new THREE.ShaderMaterial({
       vY = (modelMatrix * vec4(transformed, 1.0)).y;
     }`,
   fragmentShader: `
-    uniform vec3 color; uniform vec3 borde; uniform float opacidad, exponente, relleno, brillo, alfaRelleno, alfaBorde, escY, escOn;
+    uniform vec3 color; uniform vec3 borde; uniform float opacidad, exponente, relleno, brillo, alfaRelleno, alfaBorde, escY, escOn, suelo;
     varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
     void main() {
       if (vCab > 0.5) discard;
       float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), exponente);
-      float pies = smoothstep(0.02, 0.3, vY);
+      float pies = mix(smoothstep(0.02, 0.3, vY), 1.0, suelo);   // suelo = 1: figura tendida (no se apaga)
       float banda = escOn * exp(-pow((vY - escY) / 0.03, 2.0));
       vec3 c = mix(color, borde, smoothstep(0.15, 0.7, f)) * (relleno + brillo * f) * (0.35 + 0.65 * pies) + borde * 2.2 * banda;
       gl_FragColor = vec4(c, min(1.0, opacidad * (alfaRelleno + alfaBorde * f) * (0.4 + 0.6 * pies) + 0.7 * banda));
@@ -150,7 +196,7 @@ const matHolo = new THREE.ShaderMaterial({
 });
 const figura = new THREE.Group();
 escena.add(figura);
-let mezclador = null, accCaminar = null, accQuieto = null;
+let mezclador = null, accCaminar = null, accQuieto = null, accCaida = null;
 const RITMO = 1.25;
 
 function texturaRadial(stops, w = 64, h = 64) {
@@ -368,6 +414,7 @@ const cargaFigura = MODO === "instalacion" ? Promise.resolve() : new Promise((ok
     const clip = (nombre) => g.animations.find((a) => a.name.endsWith("|" + nombre));
     accCaminar = mezclador.clipAction(clip("Walk")); accQuieto = mezclador.clipAction(clip("Idle"));
     accCaminar.play(); accQuieto.play();
+    if (ESC_VIDEO) { accCaida = mezclador.clipAction(clip("Death")); accCaida.play(); accCaida.setEffectiveWeight(0); }
     ok();
   }, undefined, mal);
 });
@@ -404,22 +451,28 @@ ajustar();
 // ---------- animación ----------
 const COL_BASE = new THREE.Color(0x0b1a16), COL_MOV = new THREE.Color(0xff3b2f), COL_QUIETO = new THREE.Color(0x1e8cff);
 const COL_BORDE_MOV = new THREE.Color(0xff4a3d), COL_HAZ_QUIETO = new THREE.Color(0x6fa8ff);
-const tmpCol = new THREE.Color();
+const tmpCol = new THREE.Color(), tmpCol2 = new THREE.Color();
 let cuadros = 0, fpsMedido = 0, ultimoFps = performance.now();
 function actualizar(ahora) {
   const reducido = REDUCIDO.matches;
   if (MODO === "senal") {
     const t = tActual();
     ponerCamara(VISTA.az + (reducido ? 0 : 12 * Math.sin(t * 2 * Math.PI / 60)));
-    if (D) {
-      const i = idx(t), mov = D.mov[i] === 1;
-      const brillo = Math.min(1.4, D.suave[i] / Math.max(D.entrada[i], 1e-6)) / 1.4;
-      const fuerza = mov ? 0.8 + 0.2 * brillo : 0.12 + 0.45 * brillo;
-      tmpCol.copy(COL_BASE).lerp(mov ? COL_MOV : COL_QUIETO, fuerza);
+    const sv = ESC_VIDEO ? senalVideo(t) : null;              // escenario simulado: señal sintética, no K002
+    if (D || sv) {
+      const i = sv ? 0 : idx(t), mov = sv ? sv.mov : D.mov[i] === 1;
+      const brillo = Math.min(1.4, sv ? sv.suave : D.suave[i] / Math.max(D.entrada[i], 1e-6)) / 1.4;
+      if (sv) {   // fundido continuo entre azul y rojo (función pura de t: cada cuadro del video es reproducible)
+        tmpCol.copy(COL_BASE).lerp(COL_QUIETO, 0.12 + 0.45 * brillo).lerp(tmpCol2.copy(COL_BASE).lerp(COL_MOV, 0.8 + 0.2 * brillo), sv.rojo);
+      } else {
+        const fuerza = mov ? 0.8 + 0.2 * brillo : 0.12 + 0.45 * brillo;
+        tmpCol.copy(COL_BASE).lerp(mov ? COL_MOV : COL_QUIETO, fuerza);
+      }
       // Solo las baldosas a lo largo de la línea Huawei–placa: nunca un foco bajo la persona
       for (let k = 0; k < enLinea.length; k++) baldosas.setColorAt(k, enLinea[k] ? tmpCol : COL_BASE);
       baldosas.instanceColor.needsUpdate = true;
-      rojo += ((mov ? 1 : 0) - rojo) * (reducido ? 1 : 0.3);   // sigue el mismo dato que baldosas y panel, con fundido corto (~0,1 s)
+      if (sv) rojo = sv.rojo;
+      else rojo += ((mov ? 1 : 0) - rojo) * (reducido ? 1 : 0.3);   // sigue el mismo dato que baldosas y panel, con fundido corto (~0,1 s)
     }
     // MOVIMIENTO: tubo rojo grueso, ondas rojas desde la línea, borde rojo de la figura y más bloom; quieto: azul
     haz.material.color.copy(COL_HAZ_QUIETO); haz.material.opacity = 0.6 * (1 - rojo);
@@ -430,23 +483,30 @@ function actualizar(ahora) {
       o.children.forEach((a) => a.scale.set(r, r, r));
       o.userData.mat.opacity = 0.9 * rojo * (1 - q) ** 1.5;
     });
-    matHolo.uniforms.borde.value.copy(COLOR_FIG).lerp(COL_BORDE_MOV, rojo);
-    bloom.strength = BLOOM + (BLOOM_MOV - BLOOM) * rojo;
+    matHolo.uniforms.borde.value.copy(COLOR_FIG).lerp(COL_BORDE_MOV, ESC_VIDEO ? 0.7 * rojo : rojo);
+    bloom.strength = BLOOM + (BLOOM_MOV - BLOOM) * rojo + (sv ? 0.35 * sv.intenso : 0);   // caída simulada: rojo intenso
     cupulas.forEach((m, k) => {
       const r = 0.35 + (((reducido ? 1.2 : t) * 0.6 + k * 1.1) % 3.3);
-      m.scale.setScalar(r); m.material.opacity = 0.42 * (1 - r / 3.65);
+      m.scale.setScalar(r); m.material.opacity = (ESC_VIDEO ? 0.2 : 0.42) * (1 - r / 3.65);
     });
-    const p = persona(t);
-    figura.position.set(PASO_X, 0, p.z); figura.rotation.y = p.rumbo;
+    const quien = ESC_VIDEO ? personaVideo : persona;
+    const p = quien(t), cae = p.cae || 0;
+    figura.position.set(p.x ?? PASO_X, 0, p.z); figura.rotation.y = p.rumbo;
     if (mezclador) {
-      accCaminar.time = p.camina !== null ? (p.camina * RITMO) % accCaminar.getClip().duration : 0;
+      accCaminar.time = p.camina !== null ? (ESC_VIDEO ? p.camina : p.camina * RITMO) % accCaminar.getClip().duration : 0;
       accQuieto.time = (t * 0.8) % accQuieto.getClip().duration;
-      accCaminar.setEffectiveWeight(p.w); accQuieto.setEffectiveWeight(1 - p.w); mezclador.update(0);
+      accCaminar.setEffectiveWeight(p.w * (1 - cae)); accQuieto.setEffectiveWeight((1 - p.w) * (1 - cae));
+      if (accCaida) { accCaida.time = Math.min(p.tCaida, accCaida.getClip().duration - 0.001); accCaida.setEffectiveWeight(cae); }
+      mezclador.update(0);
     }
+    // tendida en el piso: sin atenuar los pies, y sin el halo ni las partículas verticales
+    matHolo.uniforms.suelo.value = cae;
+    halo.material.opacity = 0.16 * (1 - cae);
+    particulas.material.opacity = 0.5 * (1 - 0.8 * cae);
     moverParticulas(reducido ? 0 : t);
     estela.forEach((e, k) => {
-      const q = persona(t - (k + 1) * 0.07), dz = Math.abs(q.z - p.z);
-      e.position.set(PASO_X, 1.0, q.z); e.material.opacity = dz > 0.015 ? 0.07 * (1 - k / 5) : 0;
+      const q = quien(t - (k + 1) * 0.07), d = Math.hypot((q.x ?? PASO_X) - (p.x ?? PASO_X), q.z - p.z);
+      e.position.set(q.x ?? PASO_X, 1.0, q.z); e.material.opacity = d > 0.015 && cae < 0.5 ? 0.07 * (1 - k / 5) : 0;
     });
   } else if (MODO === "instalacion") {
     const t = (ahora - tInicio) / 1000;
@@ -478,13 +538,16 @@ function bucle(ahora) {
 }
 
 // Interfaz mínima para la app y las pruebas
-window.AURA_ESCENA = { modo: MODO, fps: () => fpsMedido, pausado: () => pausado, reducido: () => REDUCIDO.matches, listo: cargaFigura,
+window.AURA_ESCENA = { modo: MODO, escenario: ESC_VIDEO ? "caida_video" : null, fps: () => fpsMedido,
+  // video (escenario simulado): fija el tiempo y dibuja ese cuadro ya, sin bucle (determinista)
+  fijar: (t) => { pausado = true; tFijo = t; actualizar(performance.now()); return true; },
+  senal: ESC_VIDEO ? senalVideo : null, pausado: () => pausado, reducido: () => REDUCIDO.matches, listo: cargaFigura,
   // fracción del alto del lienzo que ocupa la figura de 1,70 m (gemelo)
   alturaFigura: () => { const a = new THREE.Vector3(0, 0, 0).project(camara), b = new THREE.Vector3(0, 1.7, 0).project(camara); return Math.round((b.y - a.y) / 2 * 100) / 100; },
   efectos: () => ({ rojo:Math.round(rojo * 100) / 100, bloom: Math.round(bloom.strength * 100) / 100, escaneo: Math.round(matHolo.uniforms.escOn.value * 100) / 100 }),
   zonas: () => Object.fromEntries(Object.entries(zonas).map(([id, z]) => [id, { op: Math.round(z.op * 100) / 100, dibujo: Math.round(z.sprites[0].material.opacity * 100) / 100, color: "#" + z.color.getHexString() }])) };
 
-const datos = MODO === "senal"
+const datos = MODO === "senal" && !ESC_VIDEO
   ? fetch("../datos/k002_reproduccion.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
   : Promise.resolve(null);
 Promise.all([datos, cargaFigura.catch((e) => { console.error("modelo", e); })]).then(([d]) => {

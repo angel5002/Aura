@@ -3,7 +3,7 @@
 import { ventana } from "../data/k002.js";
 import { el } from "./ui.js";
 
-export function crearSenal({ alto = 96, conCruces = true } = {}) {
+export function crearSenal({ alto = 96, conCruces = true, datos = ventana } = {}) {   // datos: ventana de K002 o del escenario
   const lienzo = el("canvas", { class: "senal", height: alto, "aria-label": "Señal del detector, últimos 20 segundos" });
   const ctx = lienzo.getContext("2d");
   function dibujar(t) {
@@ -12,7 +12,7 @@ export function crearSenal({ alto = 96, conCruces = true } = {}) {
     if (lienzo.width !== Math.round(w * dpr)) { lienzo.width = Math.round(w * dpr); lienzo.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const v = ventana(t, 20);
+    const v = datos(t, 20);
     if (!v || v.t.length < 2) return;
     let max = 2;
     for (let k = 0; k < v.t.length; k++) max = Math.max(max, v.suave[k] * 1.1, v.entrada[k] * 1.1);

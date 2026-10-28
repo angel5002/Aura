@@ -1,5 +1,5 @@
 // anillo.js — anillo de cuenta regresiva (45 s, lineal) y check de confirmación (trazo de 600 ms).
-import { anilloCuenta, dibujarCheck } from "../motion.js";
+import { MOV, anilloCuenta, dibujarCheck } from "../motion.js";
 import { el } from "./ui.js";
 
 const NS = "http://www.w3.org/2000/svg";
@@ -26,7 +26,15 @@ export function crearAnillo(tam = 200) {
     return tween;
   }
   function detener() { tween?.kill(); tween = null; clearInterval(reloj); }
-  return { caja, iniciar, detener, tween: () => tween, texto: () => cifra.textContent };
+  // video: el anillo y la cifra en un instante dado, sin temporizador propio (trazo directo, sin tween)
+  const largo = 2 * Math.PI * r;
+  function fijar(segundosRestantes) {
+    detener();
+    const q = Math.max(0, segundosRestantes) / MOV.cuenta.dur;
+    trazo.style.strokeDasharray = `${q * largo}px ${largo}px`; trazo.style.strokeDashoffset = "0px";
+    cifra.textContent = mmss(Math.max(0, segundosRestantes));
+  }
+  return { caja, iniciar, detener, fijar, tween: () => tween, texto: () => cifra.textContent };
 }
 
 export function crearCheck(tam = 96) {
@@ -34,7 +42,11 @@ export function crearCheck(tam = 96) {
   lienzo.append(svg("circle", { cx: 48, cy: 48, r: 44, class: "check-circulo" }));
   const trazo = svg("path", { d: "M28 50 L42 63 L69 34", class: "check-trazo" });
   lienzo.append(trazo);
-  return { lienzo, dibujar: () => dibujarCheck(trazo) };
+  const fijar = (q) => {                    // video: check dibujado hasta la fracción q (0..1)
+    const l = trazo.getTotalLength(), v = Math.max(0, Math.min(1, q)) * l;
+    trazo.style.strokeDasharray = `${v}px ${l}px`; trazo.style.strokeDashoffset = "0px";
+  };
+  return { lienzo, dibujar: () => dibujarCheck(trazo), fijar };
 }
 
 export { mmss };

@@ -2,9 +2,11 @@
 // pantalla no está visible; la app le manda el t de la reproducción, el estado de las zonas o "escanear", y el
 // iframe avisa cuando se toca una zona del gemelo.
 import { el } from "./ui.js";
+import { ESCENARIO_VIDEO } from "../data/video.js";
 
 export function crearHolograma(modo, titulo, { alTocarZona } = {}) {
-  const iframe = el("iframe", { class: "holograma", src: `holograma/index.html?modo=${modo}`, title: titulo, loading: "eager" });
+  const extra = ESCENARIO_VIDEO && modo === "senal" ? "&escenario=caida_video" : "";   // escenario simulado del video
+  const iframe = el("iframe", { class: "holograma", src: `holograma/index.html?modo=${modo}${extra}`, title: titulo, loading: "eager" });
   let listo = false;
   const pendientes = [];
   const alListo = (f) => (listo ? f() : pendientes.push(f));
@@ -19,5 +21,5 @@ export function crearHolograma(modo, titulo, { alTocarZona } = {}) {
     enviar({ tipo: "pausa", valor: v });
     if (v) removeEventListener("message", oyente);
   };
-  return { iframe, enviar, alListo, pausar };
+  return { iframe, enviar, alListo, pausar, escena: () => iframe.contentWindow?.AURA_ESCENA ?? null };
 }

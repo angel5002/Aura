@@ -8,6 +8,7 @@
 import { cambiar, estado } from "../estado.js";
 import { cargarK002, duracionK002, muestraEn } from "./k002.js";
 import { gemeloDemo } from "./escenarios.js";
+import { ESCENARIO_VIDEO } from "./video.js";
 
 const T_INICIAL = 24;                 // la reproducción arranca 6 s antes del primer cruce (t = 30 s)
 const ESPERA_ALERTA = 45;             // s (F3)
@@ -110,6 +111,7 @@ export async function pedirTeleconsulta(horario) {
 
 // ---------- arranque ----------
 export async function iniciarFuente() {
+  if (ESCENARIO_VIDEO) { cambiar({ k002: null, gemelo: gemeloDemo("normal") }); return; }   // escenario simulado: nada de K002
   const k002 = await cargarK002();
   cambiar({ k002, gemelo: gemeloDemo("normal") });
   setInterval(() => {

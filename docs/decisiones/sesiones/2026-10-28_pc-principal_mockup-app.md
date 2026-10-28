@@ -172,3 +172,27 @@ Revisión visual de las capturas y cambios hechos:
 - **Video:** `mockup/pruebas/salida/efectos/efectos_iteracion4.mp4` y `.gif` (24 s: Emergencia, Gemelo, Señal), fuera
   de git.
 
+## Video de demostración (mismo día): escenario simulado de caída, ~22 s
+- **Qué es:**
+  - una animación de 1920 × 1080 a 60 fps con el mockup de la iteración 4;
+  - guion: logo, Señal (camina y cae), Emergencia (cuenta ×10), Familia (notificación) y cierre;
+  - **es un ESCENARIO SIMULADO**: K002 no tiene caídas.
+- **Código:**
+  - `mockup/video/escenario.html`: dos marcos de celular genéricos con iframes del mockup y una sola línea de tiempo
+    GSAP. `window.__setTime(t)` dibuja un cuadro.
+  - `mockup/video/renderizar.mjs`: servidor local, render cuadro a cuadro con Playwright, y ffmpeg.
+  - Modo `?escenario=caida_video`:
+    - en la app (`src/data/video.js`): sin K002 ni /ws; Señal con "señal simulada" y sin el contador de cruces;
+      Emergencia con la cuenta fijada por el video;
+    - en el holograma: caminata, señal y caída sintéticas, y `AURA_ESCENA.fijar(t)` y `senal(t)`.
+- **Caída:** clip "Death" del mismo modelo CC0 de Quaternius. No se instaló ni se descargó nada.
+- **Resultados (medido):**
+  - 15/15 pruebas aprobadas;
+  - MP4 de 22,0 s, 1320 cuadros, H.264 yuv420p y 3,9 MB, en
+    `datos/procesados/video_mockup/aura_escenario_caida.mp4` (fuera de git), con su `generacion_video.json`.
+- **Cambios de guion (aprobados por Deisy):**
+  - ×10 desde 12,8 s;
+  - caída a 1,1×;
+  - "Familia avisada (simulación)" al final;
+  - rojo solo dentro de la zona de baldosas;
+  - notificación sin el prefijo "AURA:".

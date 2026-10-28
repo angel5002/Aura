@@ -5,6 +5,7 @@ import { escuchar, estado } from "../estado.js";
 import { responderEmergencia } from "../data/fuente.js";
 import { crearAnillo, crearCheck } from "../components/anillo.js";
 import { el, etiqueta, rotulo } from "../components/ui.js";
+import { ESCENARIO_VIDEO } from "../data/video.js";
 
 export default {
   id: "emergencia",
@@ -53,10 +54,27 @@ export default {
         mostrarResultado("Alerta cancelada", "Qué bueno. No avisamos a nadie.");
       }
     }
-    let soltar = null;
+    let soltar = null, checkVideo = null;
     return {
       nodo,
+      // video (escenario simulado): {restante} s de la cuenta; al llegar a 0, "Familia avisada (simulación)" (avisando: s desde 0)
+      cuadro(t, { restante = 45, avisando = null } = {}) {
+        if (avisando === null) {
+          if (pregunta.hidden) { pregunta.hidden = false; resultado.hidden = true; }
+          anillo.fijar(restante);
+        } else {
+          if (!checkVideo) {
+            checkVideo = crearCheck(88);
+            resultado.replaceChildren(checkVideo.lienzo,
+              el("h1", { class: "titulo centrado", "data-prueba": "resultado-emergencia" }, "Familia avisada (simulación)"));
+          }
+          pregunta.hidden = true; resultado.hidden = false;
+          checkVideo.fijar(avisando / 0.6);
+        }
+        return true;
+      },
       mostrar() {
+        if (ESCENARIO_VIDEO) { anillo.fijar(45); return; }
         if (estado.alerta?.tipo !== "CAIDA") lanzarEscenario("caida");
         aplicar();
         soltar = escuchar((_, p) => { if ("alerta" in p) aplicar(); });
