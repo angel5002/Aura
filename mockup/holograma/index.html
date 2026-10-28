@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURA · holograma</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05080f; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<!-- three r128 y sus módulos de ejemplo, copiados en local desde three@0.128.0 (sin CDN: abre sin internet) -->
+<script src="vendor/three.min.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script>
+"use strict";
+// Copia adaptada de analisis/escena_k002/index.html (escena K002) para el mockup. Cambios respecto del original:
+// lienzo del tamaño de la ventana (nitidez máx. 2x), sin HUD (los rótulos los pone la app), sin profundidad de
+// campo (costo en el celular), pausa cuando la pantalla no se ve, prefers-reduced-motion y dos modos:
+//   ?modo=senal   escena K002: señal y estado = DATOS REALES (k002_reproduccion.json); figura = PROTOCOLO.
+//   ?modo=gemelo  solo la figura translúcida; cada zona se ilumina con el color de su chip (lo manda la app).
+// Mensajes de la app (postMessage): {tipo:"t", t} · {tipo:"pausa", valor} · {tipo:"zonas", colores} · {tipo:"escanear"}
+// Modelo: "Animated Human" de Quaternius, CC0 (poly.pizza/m/c3Ibh9I3udk).
+const P = new URLSearchParams(location.search);
+const MODO = P.get("modo") === "gemelo" ? "gemelo" : "senal";
+const REDUCIDO = matchMedia("(prefers-reduced-motion: reduce)");
+let D = null;                                         // datos reales de K002 (solo modo señal)
+
+// ---------- reloj: la app manda el t de la reproducción; entre mensajes se interpola ----------
+let tRecibido = null, tRecibidoEn = 0, pausado = false;
+const tInicio = performance.now();
+function tActual() {
+  if (tRecibido !== null) return tRecibido + (performance.now() - tRecibidoEn) / 1000;
+  return ((performance.now() - tInicio) / 1000) % 330;
+}
+addEventListener("message", (e) => {
+  if (e.origin !== location.origin) return;
+  const m = e.data || {};
+  if (m.tipo === "t") { tRecibido = m.t; tRecibidoEn = performance.now(); }
+  else if (m.tipo === "pausa") { pausado = !!m.valor; if (!pausado) requestAnimationFrame(bucle); }
+  else if (m.tipo === "zonas") pintarZonas(m.colores || {});
+  else if (m.tipo === "escanear") escanear();
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !pausado) requestAnimationFrame(bucle); });
+
+function idx(t) {
+  let a = 0, b = D.t.length - 1;
+  if (t < D.t[0]) return 0;
+  while (a < b) { const m = (a + b + 1) >> 1; if (D.t[m] <= t) a = m; else b = m - 1; }
+  return a;
+}
+
+// ---------- protocolo (figura), igual que la escena original ----------
+const PUNTO1_Z = 0.80, VUELTA_Z = -0.20, PASO_X = 0.0;
+const SALIDA = -0.5, LLEGADA = 0.9, GIRO_FIN = 1.3, REGRESO = 2.5, GIRO = 0.4, PESO_MAX = 0.85;
+const rampa = (x) => Math.max(0, Math.min(1, x));
+function persona(t) {
+  for (const tc of (D ? D.cruces : [])) {
+    const s = t - tc;
+    if (s >= SALIDA && s < LLEGADA)
+      return { z: PUNTO1_Z + (s - SALIDA) / (LLEGADA - SALIDA) * (VUELTA_Z - PUNTO1_Z), camina: s - SALIDA, rumbo: Math.PI,
+               w: PESO_MAX * rampa(Math.min((s - SALIDA) / 0.25, (LLEGADA - s) / 0.2 + 0.3)) };
+    if (s >= LLEGADA && s < GIRO_FIN)
+      return { z: VUELTA_Z, camina: s - SALIDA, rumbo: Math.PI * (1 - (s - LLEGADA) / (GIRO_FIN - LLEGADA)),
+               w: 0.3 * rampa(1 - (s - LLEGADA) / 0.15) };
+    if (s >= GIRO_FIN && s < REGRESO)
+      return { z: VUELTA_Z + (s - GIRO_FIN) / (REGRESO - GIRO_FIN) * (PUNTO1_Z - VUELTA_Z), camina: s - SALIDA, rumbo: 0,
+               w: PESO_MAX * rampa(Math.min((s - GIRO_FIN) / 0.2 + 0.3, (REGRESO - s) / 0.2 + 0.3)) };
+    if (s >= REGRESO && s < REGRESO + GIRO)
+      return { z: PUNTO1_Z, camina: null, rumbo: Math.PI * (s - REGRESO) / GIRO, w: 0 };
+  }
+  return { z: PUNTO1_Z, camina: null, rumbo: Math.PI, w: 0 };
+}
+
+// ---------- escena ----------
+const gl = document.getElementById("gl");
+const renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setClearColor(0x05080f, 1);
+const escena = new THREE.Scene();
+const camara = new THREE.PerspectiveCamera(36, 1, 0.1, 40);
+escena.add(new THREE.HemisphereLight(0x6f8cff, 0x05080f, 0.6));
+const luz = new THREE.DirectionalLight(0xffffff, 0.5); luz.position.set(2, 4, 3); escena.add(luz);
+
+const VISTA = MODO === "senal"
+  ? { dist: 5.6, incl: 40, az: -16, mira: new THREE.Vector3(0, 0.55, 0.0), hfov: 48 }
+  : { dist: 4.4, incl: 6, az: 0, mira: new THREE.Vector3(0, 0.92, 0), vfov: 30 };
+function ponerCamara(azGrados) {
+  const a = THREE.MathUtils.degToRad(azGrados), e = THREE.MathUtils.degToRad(VISTA.incl);
+  camara.position.set(VISTA.mira.x + VISTA.dist * Math.cos(e) * Math.sin(a), VISTA.mira.y + VISTA.dist * Math.sin(e),
+                      VISTA.mira.z + VISTA.dist * Math.cos(e) * Math.cos(a));
+  camara.lookAt(VISTA.mira);
+}
+
+// Material Fresnel de la figura (original): borde más brillante que el centro, sin esqueleto a la vista
+const matHolo = new THREE.ShaderMaterial({
+  skinning: true, transparent: true, depthWrite: false, side: THREE.FrontSide,
+  uniforms: { color: { value: new THREE.Color(MODO === "gemelo" ? 0x22d3ee : 0x3dffc0) }, opacidad: { value: 0.6 } },
+  vertexShader: `
+    #include <common>
+    #include <skinning_pars_vertex>
+    attribute float aCabeza;
+    varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
+    void main() {
+      vCab = aCabeza;
+      #include <skinbase_vertex>
+      #include <beginnormal_vertex>
+      #include <skinnormal_vertex>
+      #include <defaultnormal_vertex>
+      #include <begin_vertex>
+      #include <skinning_vertex>
+      #include <project_vertex>
+      vN = normalize(transformedNormal); vV = normalize(-mvPosition.xyz);
+      vY = (modelMatrix * vec4(transformed, 1.0)).y;
+    }`,
+  fragmentShader: `
+    uniform vec3 color; uniform float opacidad;
+    varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
+    void main() {
+      if (vCab > 0.5) discard;
+      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.4);
+      float pies = smoothstep(0.02, 0.3, vY);
+      vec3 c = color * (0.22 + 1.4 * f) * (0.35 + 0.65 * pies);
+      gl_FragColor = vec4(c, opacidad * (0.05 + 0.7 * f) * (0.4 + 0.6 * pies));
+    }`,
+});
+const figura = new THREE.Group();
+escena.add(figura);
+let mezclador = null, accCaminar = null, accQuieto = null;
+const RITMO = 1.25;
+
+function texturaRadial(stops, w = 64, h = 64) {
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  const x = cv.getContext("2d"); x.translate(w / 2, h / 2); x.scale(1, h / w);
+  const g = x.createRadialGradient(0, 0, 0, 0, 0, w / 2);
+  stops.forEach(([p, c]) => g.addColorStop(p, c));
+  x.fillStyle = g; x.fillRect(-w / 2, -w / 2, w, w);
+  return new THREE.CanvasTexture(cv);
+}
+const texHalo = texturaRadial([[0, "rgba(255,255,255,0.9)"], [0.5, "rgba(255,255,255,0.3)"], [1, "rgba(255,255,255,0)"]], 64, 128);
+const texPunto = texturaRadial([[0, "rgba(255,255,255,1)"], [0.4, "rgba(255,255,255,0.35)"], [1, "rgba(255,255,255,0)"]]);
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: MODO === "gemelo" ? 0x22d3ee : 0x2fffc8, transparent: true, opacity: 0.16, depthWrite: false }));
+halo.scale.set(1.0, 1.9, 1); halo.position.y = 1.1;
+figura.add(halo);
+
+// Partículas suaves alrededor de la figura (reproducibles)
+const NP = 160, semillas = [];
+const geoPart = new THREE.BufferGeometry();
+geoPart.setAttribute("position", new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
+let sem = 7; const azar = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
+for (let i = 0; i < NP; i++) semillas.push({ a: azar() * Math.PI * 2, r: 0.22 + azar() * 0.3, y: azar(), v: 0.08 + azar() * 0.12, f: azar() });
+const particulas = new THREE.Points(geoPart, new THREE.PointsMaterial({
+  color: MODO === "gemelo" ? 0x7fe9f7 : 0x7dffd8, size: 0.035, map: texPunto, transparent: true, opacity: 0.5, depthWrite: false }));
+figura.add(particulas);
+function moverParticulas(t) {
+  const pos = geoPart.attributes.position.array;
+  semillas.forEach((s, i) => {
+    const h = (s.y + t * s.v) % 1, a = s.a + t * 0.25 * (s.f - 0.5);
+    pos[i * 3] = Math.cos(a) * s.r; pos[i * 3 + 1] = 0.35 + h * 1.5; pos[i * 3 + 2] = Math.sin(a) * s.r;
+  });
+  geoPart.attributes.position.needsUpdate = true;
+}
+
+// ---------- modo señal: sala de K002 (igual que el original) ----------
+let baldosas = null, enLinea = [], haz = null, cupulas = [], estela = [];
+const HUAWEI = new THREE.Vector3(-1, 1, 0), PLACA = new THREE.Vector3(1, 1, 0);
+if (MODO === "senal") {
+  escena.fog = new THREE.FogExp2(0x05080f, 0.075);
+  const LADO = 0.2, NX = 40, NZ = 34, tmp = new THREE.Object3D();
+  baldosas = new THREE.InstancedMesh(new THREE.BoxGeometry(LADO * 0.82, 0.01, LADO * 0.82),
+                                     new THREE.MeshBasicMaterial({ color: 0xffffff }), NX * NZ);
+  let n = 0;
+  for (let i = 0; i < NX; i++) for (let k = 0; k < NZ; k++) {
+    const x = (i - (NX - 1) / 2) * LADO, z = (k - (NZ - 1) / 2) * LADO - 0.6;
+    tmp.position.set(x, 0, z); tmp.updateMatrix(); baldosas.setMatrixAt(n, tmp.matrix);
+    enLinea.push(Math.abs(z) <= 0.3 && x >= -1.0 && x <= 1.0);
+    baldosas.setColorAt(n, new THREE.Color(0x0b1a16)); n++;
+  }
+  escena.add(baldosas);
+  const equipo = (pos, color, tam, conPie = true) => {
+    const g = new THREE.Group();
+    const caja = new THREE.Mesh(new THREE.BoxGeometry(...tam), new THREE.MeshStandardMaterial({ color: 0x141922, emissive: color, emissiveIntensity: 0.12 }));
+    const bordes = new THREE.LineSegments(new THREE.EdgesGeometry(caja.geometry), new THREE.LineBasicMaterial({ color }));
+    const pie = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, pos.y - tam[1] / 2, 8), new THREE.MeshBasicMaterial({ color: 0x23324a }));
+    pie.position.set(0, -pos.y / 2, 0);
+    g.add(caja, bordes); if (conPie) g.add(pie); g.position.copy(pos); escena.add(g);
+  };
+  equipo(HUAWEI, 0x4f7dff, [0.22, 0.16, 0.16]);
+  equipo(PLACA, 0x2fe08a, [0.10, 0.04, 0.06]);
+  equipo(new THREE.Vector3(0.45, 1.0, -1.15), 0xd9a441, [0.08, 0.012, 0.16], false);
+  const cama = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 1.1), new THREE.MeshStandardMaterial({ color: 0x10151f }));
+  cama.position.set(0.3, 0.25, -1.75); escena.add(cama);
+  escena.add(new THREE.LineSegments(new THREE.EdgesGeometry(cama.geometry), new THREE.LineBasicMaterial({ color: 0x2a3550 })).translateX(0.3).translateY(0.25).translateZ(-1.75));
+  haz = new THREE.Line(new THREE.BufferGeometry().setFromPoints([HUAWEI, PLACA]),
+                       new THREE.LineDashedMaterial({ color: 0x6fa8ff, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: 0.6 }));
+  haz.computeLineDistances(); escena.add(haz);
+  const geoCupula = new THREE.SphereGeometry(1, 28, 9, 0, Math.PI * 2, 0, Math.PI / 2);
+  for (let i = 0; i < 3; i++) {
+    const m = new THREE.Mesh(geoCupula, new THREE.MeshBasicMaterial({ color: 0x5a86ff, wireframe: true, transparent: true, opacity: 0.5, fog: false }));
+    m.position.copy(HUAWEI); m.position.y = 0.0; escena.add(m); cupulas.push(m);
+  }
+  for (let k = 1; k <= 5; k++) {
+    const e = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: 0x2fffc8, transparent: true, opacity: 0, depthWrite: false }));
+    e.scale.set(0.6, 1.7, 1); e.position.y = 1.0; escena.add(e); estela.push(e);
+  }
+  const matMarca = new THREE.MeshBasicMaterial({ color: 0xaab6cc, transparent: true, opacity: 0.5, depthWrite: false });
+  const plano = (w, h, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matMarca); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.008, z); escena.add(m); };
+  const anillo = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.195, 40), matMarca);
+  anillo.rotation.x = -Math.PI / 2; anillo.position.set(PASO_X, 0.008, PUNTO1_Z); escena.add(anillo);
+  plano(0.5, 0.025, PASO_X, PUNTO1_Z); plano(0.025, 0.5, PASO_X, PUNTO1_Z);
+  plano(0.6, 0.03, PASO_X, VUELTA_Z); plano(0.03, 0.14, PASO_X - 0.3, VUELTA_Z); plano(0.03, 0.14, PASO_X + 0.3, VUELTA_Z);
+}
+
+// ---------- modo gemelo: zonas que se iluminan con el color de su chip, piso y línea de escaneo ----------
+const ZONAS = { cabeza: [0, 1.58, 0.05, 0.42], pulmones: [-0.06, 1.28, 0.08, 0.46], corazon: [0.07, 1.3, 0.1, 0.26],
+                piernas: [0, 0.55, 0.05, 0.7], aura: [0, 0.95, -0.1, 2.3] };
+const zonas = {};
+let linea = null, escaneoInicio = -1;
+if (MODO === "gemelo") {
+  for (const [nombre, [x, y, z, tam]] of Object.entries(ZONAS)) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texPunto, color: 0x7c8ba1, transparent: true,
+      opacity: nombre === "aura" ? 0.22 : 0.55, depthWrite: false, depthTest: false }));
+    s.scale.set(tam, nombre === "aura" ? tam * 1.1 : tam, 1); s.position.set(x, y, z); s.renderOrder = 2;
+    figura.add(s); zonas[nombre] = s;
+  }
+  const piso = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.46, 64), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.45 }));
+  piso.rotation.x = -Math.PI / 2; piso.position.y = 0.005; escena.add(piso);
+  linea = new THREE.Mesh(new THREE.RingGeometry(0.0, 0.5, 48), new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+  linea.rotation.x = -Math.PI / 2; escena.add(linea);
+}
+function pintarZonas(colores) {
+  for (const [nombre, color] of Object.entries(colores)) if (zonas[nombre]) zonas[nombre].material.color.set(color);
+}
+function escanear() { escaneoInicio = performance.now(); }
+
+const cargaFigura = new Promise((ok, mal) => {
+  new THREE.GLTFLoader().load("modelos/quaternius_animated_human.glb", (g) => {
+    const modelo = g.scene;
+    modelo.traverse((o) => { if (o.isMesh) { o.material = matHolo; o.frustumCulled = false; } });
+    modelo.updateMatrixWorld(true);
+    const caja = new THREE.Box3().setFromObject(modelo), tam = caja.getSize(new THREE.Vector3());
+    modelo.scale.multiplyScalar(1.70 / tam.y);
+    modelo.position.y = -caja.min.y * 1.70 / tam.y;
+    figura.add(modelo);
+    modelo.updateMatrixWorld(true);
+    let malla = null; modelo.traverse((o) => { if (o.isSkinnedMesh) malla = o; });
+    const huesos = malla.skeleton.bones, cabeza = huesos.find((b) => b.name === "Head");
+    const deCabeza = new Set(); cabeza.traverse((b) => deCabeza.add(huesos.indexOf(b)));
+    const geo = malla.geometry, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+    const aCab = new Float32Array(si.count), caja3 = new THREE.Box3(), v = new THREE.Vector3();
+    for (let i = 0; i < si.count; i++) {
+      let p = 0;
+      for (const c of ["getX", "getY", "getZ", "getW"]) if (deCabeza.has(si[c](i))) p += sw[c](i);
+      aCab[i] = p;
+      if (p > 0.5) { v.fromBufferAttribute(geo.attributes.position, i); malla.boneTransform(i, v); caja3.expandByPoint(v.applyMatrix4(malla.matrixWorld)); }
+    }
+    geo.setAttribute("aCabeza", new THREE.BufferAttribute(aCab, 1));
+    const centro = caja3.getCenter(new THREE.Vector3()), tamCab = caja3.getSize(new THREE.Vector3());
+    const escCab = cabeza.getWorldScale(new THREE.Vector3()).x;
+    const matCab = matHolo.clone(); matCab.skinning = false; matCab.uniforms = matHolo.uniforms;
+    const bola = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 24), matCab);
+    const d = Math.min(tamCab.x, tamCab.z) * 0.95;
+    bola.scale.set(d / escCab, d * 1.18 / escCab, d / escCab);
+    bola.position.copy(cabeza.worldToLocal(centro.clone().add(new THREE.Vector3(0, -0.02, 0))));
+    cabeza.add(bola);
+    mezclador = new THREE.AnimationMixer(modelo);
+    const clip = (nombre) => g.animations.find((a) => a.name.endsWith("|" + nombre));
+    accCaminar = mezclador.clipAction(clip("Walk")); accQuieto = mezclador.clipAction(clip("Idle"));
+    accCaminar.play(); accQuieto.play();
+    ok();
+  }, undefined, mal);
+});
+
+// ---------- posprocesado: bloom (a media resolución) y viñeta ----------
+const compositor = new THREE.EffectComposer(renderer);
+compositor.addPass(new THREE.RenderPass(escena, camara));
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), MODO === "gemelo" ? 0.7 : 0.85, 0.55, 0.18);
+compositor.addPass(bloom);
+compositor.addPass(new THREE.ShaderPass({
+  uniforms: { tDiffuse: { value: null }, fuerza: { value: 1.15 } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float fuerza; varying vec2 vUv;
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 d = (vUv - 0.5) * vec2(1.0, 0.75);
+      gl_FragColor = vec4(c.rgb * clamp(1.0 - fuerza * dot(d, d) * 1.6, 0.0, 1.0), 1.0); }`,
+}));
+
+function ajustar() {
+  const w = innerWidth || 1, h = innerHeight || 1, a = w / h;
+  renderer.setSize(w, h, false);
+  compositor.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  compositor.setSize(w, h);
+  bloom.setSize(Math.round(w / 2), Math.round(h / 2));
+  camara.aspect = a;
+  // Señal: se conserva el ancho visible del original 16:9 (fov horizontal ~60°); gemelo: alto fijo
+  camara.fov = VISTA.vfov || THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(VISTA.hfov / 2)) / Math.max(a, 0.6)));
+  camara.updateProjectionMatrix();
+}
+addEventListener("resize", ajustar);
+ajustar();
+
+// ---------- animación ----------
+const COL_BASE = new THREE.Color(0x0b1a16), COL_MOV = new THREE.Color(0xff3b30), COL_QUIETO = new THREE.Color(0x1e8cff);
+const tmpCol = new THREE.Color();
+let cuadros = 0, fpsMedido = 0, ultimoFps = performance.now();
+function actualizar(ahora) {
+  const reducido = REDUCIDO.matches;
+  if (MODO === "senal") {
+    const t = tActual();
+    ponerCamara(VISTA.az + (reducido ? 0 : 12 * Math.sin(t * 2 * Math.PI / 60)));
+    if (D) {
+      const i = idx(t), mov = D.mov[i] === 1;
+      const brillo = Math.min(1.4, D.suave[i] / Math.max(D.entrada[i], 1e-6)) / 1.4;
+      const fuerza = mov ? 0.45 + 0.55 * brillo : 0.12 + 0.45 * brillo;
+      tmpCol.copy(COL_BASE).lerp(mov ? COL_MOV : COL_QUIETO, fuerza);
+      for (let k = 0; k < enLinea.length; k++) baldosas.setColorAt(k, enLinea[k] ? tmpCol : COL_BASE);
+      baldosas.instanceColor.needsUpdate = true;
+      haz.material.color.set(mov ? 0xff6b6b : 0x6fa8ff);
+    }
+    cupulas.forEach((m, k) => {
+      const r = 0.35 + (((reducido ? 1.2 : t) * 0.6 + k * 1.1) % 3.3);
+      m.scale.setScalar(r); m.material.opacity = 0.42 * (1 - r / 3.65);
+    });
+    const p = persona(t);
+    figura.position.set(PASO_X, 0, p.z); figura.rotation.y = p.rumbo;
+    if (mezclador) {
+      accCaminar.time = p.camina !== null ? (p.camina * RITMO) % accCaminar.getClip().duration : 0;
+      accQuieto.time = (t * 0.8) % accQuieto.getClip().duration;
+      accCaminar.setEffectiveWeight(p.w); accQuieto.setEffectiveWeight(1 - p.w); mezclador.update(0);
+    }
+    moverParticulas(reducido ? 0 : t);
+    estela.forEach((e, k) => {
+      const q = persona(t - (k + 1) * 0.07), dz = Math.abs(q.z - p.z);
+      e.position.set(PASO_X, 1.0, q.z); e.material.opacity = dz > 0.015 ? 0.07 * (1 - k / 5) : 0;
+    });
+  } else {
+    const t = (ahora - tInicio) / 1000;
+    ponerCamara(0);
+    figura.rotation.y = reducido ? 0 : 0.35 * Math.sin(t * 2 * Math.PI / 14);
+    if (mezclador) { accCaminar.setEffectiveWeight(0); accQuieto.setEffectiveWeight(1); accQuieto.time = reducido ? 0 : (t * 0.8) % accQuieto.getClip().duration; mezclador.update(0); }
+    moverParticulas(reducido ? 0 : t);
+    if (escaneoInicio >= 0) {                       // línea de escaneo de arriba abajo, una vez (1,6 s)
+      const s = (ahora - escaneoInicio) / 1600;
+      if (s >= 1 || reducido) { linea.material.opacity = 0; escaneoInicio = -1; }
+      else { linea.position.y = 1.85 * (1 - s); linea.material.opacity = 0.35 * Math.sin(Math.PI * s); }
+    }
+  }
+  compositor.render();
+}
+function bucle(ahora) {
+  if (pausado || document.hidden) return;
+  actualizar(ahora || performance.now());
+  cuadros++;
+  if (ahora - ultimoFps >= 1000) { fpsMedido = cuadros * 1000 / (ahora - ultimoFps); cuadros = 0; ultimoFps = ahora; }
+  requestAnimationFrame(bucle);
+}
+
+// Interfaz mínima para la app y las pruebas
+window.AURA_ESCENA = { modo: MODO, fps: () => fpsMedido, pausado: () => pausado, reducido: () => REDUCIDO.matches, listo: cargaFigura };
+
+const datos = MODO === "senal"
+  ? fetch("../datos/k002_reproduccion.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  : Promise.resolve(null);
+Promise.all([datos, cargaFigura.catch((e) => { console.error("modelo", e); })]).then(([d]) => {
+  D = d;
+  parent.postMessage({ tipo: "holograma_listo", modo: MODO, datos: !!d }, location.origin);
+  requestAnimationFrame(bucle);
+});
+</script>
+</body>
+</html>

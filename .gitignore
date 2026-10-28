@@ -70,3 +70,10 @@ firmware/versiones/**/bin/
 registro_sesiones.csv
 # Paquetes generados (el kit va como carpeta kit_captura/)
 *.zip
+
+# --- Mockup de la app ---
+# Referencias internas del equipo (propuesta, requerimientos, videos): fuera de git (decisión de Deisy, 28/10/2026)
+docs/mockup/referencias/
+# Ningún video entra a git
+*.mp4
+# node_modules, app/ (compilado con datos de K002), publico/ y pruebas/salida/: ver mockup/.gitignore

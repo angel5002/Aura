@@ -4,9 +4,27 @@
     {
       "name": "escena-k002",
       "runtimeExecutable": "C:\\aura\\analisis\\.venv\\Scripts\\python.exe",
-      "runtimeArgs": ["C:\\aura\\analisis\\escena_k002.py", "servir", "--puerto", "8765"],
+      "runtimeArgs": [
+        "C:\\aura\\analisis\\escena_k002.py",
+        "servir",
+        "--puerto",
+        "8765"
+      ],
       "port": 8765,
       "url": "http://127.0.0.1:8765"
+    },
+    {
+      "name": "mockup-app",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:\\aura\\mockup\\node_modules\\vite\\bin\\vite.js",
+        "preview",
+        "C:\\aura\\mockup",
+        "--port",
+        "4173",
+        "--strictPort"
+      ],
+      "port": 4173
     }
   ]
 }

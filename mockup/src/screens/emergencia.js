@@ -1,0 +1,63 @@
+// 6 · Emergencia — escenario "caída": cuenta regresiva de 45 s, "Estoy bien" / "Necesito ayuda".
+// Sin respuesta: "Familia avisada (simulación)", o Telegram solo si servidor.py está activo (lo envía él).
+import { escuchar, estado } from "../estado.js";
+import { responderEmergencia } from "../data/fuente.js";
+import { crearAnillo, crearCheck } from "../components/anillo.js";
+import { chip, el, etiqueta, rotulo } from "../components/ui.js";
+
+export default {
+  id: "emergencia",
+  crear({ navegar, lanzarEscenario }) {
+    const anillo = crearAnillo(196);
+    const pregunta = el("div", { class: "emergencia-pregunta" },
+      el("div", { class: "anillo-centro" }, anillo.caja, el("span", { class: "signo", "aria-hidden": "true" }, "!")),
+      el("h1", { class: "titulo centrado" }, "¿Estás bien?"),
+      el("p", { class: "cuerpo centrado texto-2" }, "Escenario de demo: movimiento brusco seguido de inmovilidad en la sala."),
+      el("button", { class: "boton boton-claro ancho", type: "button", "data-prueba": "estoy-bien", onclick: () => responderEmergencia("bien") }, "Estoy bien"),
+      el("button", { class: "boton boton-peligro ancho", type: "button", "data-prueba": "necesito-ayuda", onclick: () => responderEmergencia("ayuda") }, "Necesito ayuda"),
+      el("p", { class: "rotulo centrado" }, "Si no respondes, AURA avisa a tu familia cuando el anillo se vacía."));
+    const resultado = el("div", { class: "emergencia-resultado", hidden: true });
+
+    const nodo = el("div", { class: "pantalla pantalla-emergencia" },
+      el("div", { class: "fila-entre" }, etiqueta("Posible caída · sala"), el("span", { class: "chips" }, chip("prototipo"), chip("demo"))),
+      pregunta, resultado,
+      rotulo("Caídas es un prototipo sin validar: siempre pide confirmación. No es un servicio de emergencias; ante una urgencia llama al 106 (SAMU)."));
+
+    function mostrarResultado(texto, detalle) {
+      anillo.detener();
+      const check = crearCheck(88);
+      resultado.replaceChildren(check.lienzo,
+        el("h1", { class: "titulo centrado", "data-prueba": "resultado-emergencia" }, texto),
+        el("p", { class: "cuerpo centrado texto-2" }, detalle),
+        el("button", { class: "boton boton-sec ancho", type: "button", onclick: () => navegar("hoy") }, "Volver a Hoy"));
+      pregunta.hidden = true; resultado.hidden = false;
+      check.dibujar();
+    }
+    function aplicar() {
+      const a = estado.alerta;
+      if (a?.tipo === "CAIDA") {
+        pregunta.hidden = false; resultado.hidden = true;
+        const tw = anillo.tween();
+        const resta = a.segundos - (performance.now() - a.desde) / 1000;
+        if (!tw || Math.abs(tw.duration() - tw.time() - resta) > 2) window.__aura.anillo = anillo.iniciar(a.segundos, a.desde);
+      } else if (a?.tipo === "FAMILIA_AVISADA" || a?.tipo === "AYUDA_SOLICITADA") {
+        const sim = a.simulacion !== false;
+        mostrarResultado(sim ? "Familia avisada (simulación)" : "Familia avisada",
+          sim ? "En el MVP, servidor.py enviaría un mensaje de Telegram a tu familiar. Aquí no se envió nada."
+              : "servidor.py envió el aviso por Telegram.");
+      } else if (a === null) {
+        mostrarResultado("Alerta cancelada", "Qué bueno que estés bien. No se avisó a nadie.");
+      }
+    }
+    let soltar = null;
+    return {
+      nodo,
+      mostrar() {
+        if (estado.alerta?.tipo !== "CAIDA") lanzarEscenario("caida");
+        aplicar();
+        soltar = escuchar((_, p) => { if ("alerta" in p) aplicar(); });
+      },
+      ocultar() { soltar?.(); anillo.detener(); },
+    };
+  },
+};

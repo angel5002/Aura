@@ -1,0 +1,9 @@
+node_modules/
+# Compilado (lleva la reproducción K002 y el modelo .glb): fuera de git
+app/
+# Generado por scripts/preparar_datos.mjs a partir de datos/procesados (fuera de git)
+publico/
+# Salidas de Playwright (capturas con datos de K002)
+pruebas/salida/
+test-results/
+playwright-report/
