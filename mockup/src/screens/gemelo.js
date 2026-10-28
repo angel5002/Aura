@@ -47,7 +47,7 @@ export default {
 
     function zonas() {
       const z = {};
-      if (modo === "escenario") z[ESCENARIOS[esc].zona] = { color: ESCENARIOS[esc].color, nivel: 1 };
+      if (modo === "escenario") z[ESCENARIOS[esc].zona] = { color: ESCENARIOS[esc].color, nivel: 1, late: true };   // late con fuerza (iteración 4)
       else if (estado.alerta?.tipo === "CAIDA") z.caidas = { color: ROJO, nivel: 1 };
       holo.enviar({ tipo: "zonas", zonas: z });
       holo.enviar({ tipo: "actividad", mov: modo === "real" && !!estado.muestra?.mov });

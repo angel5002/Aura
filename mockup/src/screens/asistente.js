@@ -19,7 +19,7 @@ export default {
   crear({ navegar }) {
     const conversacion = el("div", { class: "conversacion", "aria-live": "polite" },
       burbuja("Hola. ¿Te cuento cómo va tu día?"));
-    const nota = el("p", { class: "rotulo centrado" }, "Toca el orbe o elige una pregunta.");
+    const nota = el("p", { class: "rotulo centrado" });   // vacía al entrar (iteración 4); solo dice qué hace el orbe al tocarlo
     const orbe = crearOrbe({
       alTocar: async () => {
         nota.textContent = "Escuchando…";

@@ -5,7 +5,7 @@ import { muestraEn } from "../data/k002.js";
 import { contar } from "../motion.js";
 import { crearHolograma } from "../components/holograma.js";
 import { crearSenal } from "../components/senal.js";
-import { el, etiqueta, rotulo } from "../components/ui.js";
+import { el, etiqueta } from "../components/ui.js";
 
 export default {
   id: "senal",
@@ -13,8 +13,7 @@ export default {
     const holo = crearHolograma("senal", "Escena 3D de la prueba K002");
     const estadoTxt = el("p", { class: "estado-senal", "data-prueba": "estado-senal" }, "—");
     const cruces = el("span", { class: "cifra", "data-valor": 0 }, "0");
-    const tasa = el("span", { class: "tabular" }, "—");
-    const tiempo = el("p", { class: "tiempo-chico tabular" }, "—");
+    const tiempo = el("p", { class: "tiempo-chico mono" }, "—");
     const senal = crearSenal({ alto: 92 });
     const sinDatos = !estado.k002;
 
@@ -22,14 +21,12 @@ export default {
       etiqueta("Señal WiFi"),
       el("div", { class: "fila-entre" },
         el("span", { class: "sello-reproduccion" }, el("span", { class: "punto-reproduccion" }), "Prueba K002 · 27/10"), tiempo),
-      el("div", { class: "holo-caja holo-senal" }, holo.iframe),
-      rotulo("Esquema ilustrativo"),
+      el("div", { class: "holo-caja holo-senal" }, holo.iframe, el("span", { class: "esquina-escena" }, "Esquema ilustrativo")),
       sinDatos
         ? el("p", { class: "cuerpo texto-2" }, "Esta copia de la app no trae la reproducción de K002.")
         : el("section", { class: "tarjeta" },
           el("div", { class: "fila-entre" }, estadoTxt, el("div", { class: "derecha" }, el("div", {}, cruces, el("span", { class: "cifra-de" }, " / 10")),
             el("p", { class: "rotulo" }, "cruces detectados"))),
-          el("p", { class: "cuerpo" }, tasa),
           senal.lienzo,
           el("p", { class: "rotulo" }, el("span", { class: "leyenda leyenda-senal" }, "señal, últimos 20 s"), " · ",
             el("span", { class: "leyenda leyenda-umbral" }, "umbral"))));
@@ -37,10 +34,9 @@ export default {
     let cuadro = 0, soltar = null, ultimoEnvio = 0, previo = {};
     function pintar(m) {                        // cada cuadro, con el mismo t que la escena; solo toca lo que cambia
       if (!m || m.t == null) return;
-      const nuevo = { mov: m.mov, det: m.detectados, tasa: Math.round(m.tasa), t: m.t.toFixed(1) };
+      const nuevo = { mov: m.mov, det: m.detectados, t: m.t.toFixed(1) };   // muestras/s: en el panel técnico (iteración 4)
       if (nuevo.mov !== previo.mov) { estadoTxt.textContent = m.mov ? "MOVIMIENTO" : "quieto"; estadoTxt.classList.toggle("en-movimiento", m.mov); }
       if (nuevo.det !== previo.det) contar(cruces, m.detectados);
-      if (nuevo.tasa !== previo.tasa) tasa.textContent = `${nuevo.tasa} muestras/s`;
       if (nuevo.t !== previo.t) { const seg = Math.floor(m.t); tiempo.textContent = `${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, "0")}`; }
       previo = nuevo;
     }

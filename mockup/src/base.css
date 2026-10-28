@@ -21,7 +21,7 @@ button { font: inherit; color: inherit; }
 /* ---------- barra superior y sello ---------- */
 .barra-sup { position: absolute; inset: 0 0 auto; height: 48px; display: flex; align-items: center; justify-content: space-between;
   padding: 0 var(--e4); z-index: 30; background: var(--bg); border-bottom: 1px solid var(--line); }
-.marca-mini { font: 800 15px/1 var(--fuente); letter-spacing: 0.08em; color: var(--text); text-shadow: 0 0 14px rgba(92, 200, 214, 0.3); }
+.marca-mini { font: 600 15px/1 var(--fuente); letter-spacing: 0.08em; color: var(--text); text-shadow: 0 0 14px rgba(92, 200, 214, 0.3); }
 .sello-demo { font: 600 12px/1 var(--fuente); color: var(--primary); border-radius: var(--r-pildora);
   padding: 6px 10px; background: var(--tinte-primary); }
 
@@ -55,7 +55,7 @@ body.sin-barra .barra-inf { display: none; }
 .rotulo { font: var(--pequeno); color: var(--text-2); margin: 0; }
 .rotulo-destacado { color: var(--text-2); border-left: 2px solid var(--line); padding-left: var(--e2); }
 .cifra { font: var(--cifra); font-feature-settings: "tnum"; }
-.cifra-de { font: 600 15px/1 var(--fuente); color: var(--text-2); }
+.cifra-de { font: 500 15px/1 var(--fuente-mono); color: var(--text-2); }
 .tabular { font-feature-settings: "tnum"; }
 .centrado { text-align: center; }
 .derecha { text-align: right; }
@@ -143,6 +143,8 @@ body.sin-barra .barra-inf { display: none; }
 .holo-caja { position: relative; border-radius: var(--r-tarjeta); overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
 .holo-gemelo { height: 340px; }
 .holo-senal { height: 300px; }
+.esquina-escena { position: absolute; left: var(--e2); bottom: var(--e2); font: 400 11px/1 var(--fuente); color: var(--text-2);
+  background: rgba(5, 8, 15, 0.78); padding: 4px 6px; border-radius: 6px; pointer-events: none; }
 .holograma { display: block; width: 100%; height: 100%; border: 0; }
 .sello-reproduccion { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--fuente); color: var(--warn);
   background: var(--tinte-warn); border-radius: var(--r-pildora); padding: 6px 10px; }
@@ -162,13 +164,31 @@ body[data-pantalla="emergencia"] .barra-sup { background: var(--emergencia-bg); 
 .pantalla-emergencia { min-height: 100%; background: var(--emergencia-bg); box-shadow: inset 0 0 0 1px rgba(240, 122, 106, 0.3); }
 .pantalla-emergencia .etiqueta { color: var(--danger); }
 .emergencia-pregunta, .emergencia-resultado { display: flex; flex-direction: column; align-items: center; gap: var(--e3); }
-.anillo-centro { position: relative; display: grid; place-items: center; margin: var(--e2) 0; }
+.anillo-centro { position: relative; display: grid; place-items: center; width: 288px; height: 288px; margin: calc(-1 * var(--e3)) 0; }
+/* Latido (iteración 4): halo difuso detrás del anillo que crece e intensifica cada 1,6 s, más tres círculos tenues.
+   Solo transform y opacity (compositor). El halo es un anillo de luz: el centro queda oscuro, así la cifra y el "!"
+   conservan su contraste. Con movimiento reducido: brillo fijo, sin bucle. */
+.halo-latido { position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, transparent 0 58%, rgba(240, 122, 106, 0.42) 66%, rgba(240, 122, 106, 0.12) 80%, transparent 96%);
+  animation: latido 1.6s ease-in-out infinite; will-change: transform, opacity; }
+.eco-latido { position: absolute; left: 50%; top: 50%; border-radius: 50%; border: 1px solid rgba(240, 122, 106, 0.3); pointer-events: none;
+  translate: -50% -50%; animation: eco 1.6s ease-out infinite; will-change: transform, opacity; }
+.eco-latido:nth-of-type(2) { width: 222px; height: 222px; }
+.eco-latido:nth-of-type(3) { width: 252px; height: 252px; animation-delay: 0.14s; }
+.eco-latido:nth-of-type(4) { width: 282px; height: 282px; animation-delay: 0.28s; }
+@keyframes latido { 0%, 100% { transform: scale(0.93); opacity: 0.5; } 32% { transform: scale(1.04); opacity: 1; } }
+@keyframes eco { 0%, 100% { transform: scale(0.97); opacity: 0.35; } 32% { transform: scale(1.02); opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) {
+  .halo-latido, .eco-latido { animation: none !important; }
+  .halo-latido { opacity: 0.8; }
+  .eco-latido { opacity: 0.6; }
+}
 .anillo-caja { position: relative; display: grid; place-items: center; }
 .anillo { position: absolute; inset: 0; }
 .anillo-fondo { fill: rgba(240, 122, 106, 0.06); stroke: rgba(240, 122, 106, 0.16); stroke-width: 6; }
-.anillo-trazo { fill: none; stroke: var(--danger); stroke-width: 6; stroke-linecap: round; }
+.anillo-trazo { fill: none; stroke: var(--danger); stroke-width: 6; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(240, 122, 106, 0.7)); }
 .anillo-cifra { position: relative; margin-top: 64px; color: var(--text); }
-.signo { position: absolute; top: 48px; font: 600 40px/1 var(--fuente); color: var(--danger); }
+.signo { position: absolute; top: calc(50% - 50px); font: 600 40px/1 var(--fuente); color: var(--danger); }
 
 /* ---------- teleconsulta y confirmación ---------- */
 .teleconsulta-fondo, .confirmacion { display: flex; flex-direction: column; gap: var(--e3); }
@@ -191,7 +211,7 @@ body[data-pantalla="emergencia"] .barra-sup { background: var(--emergencia-bg); 
 .opcion-hora { grid-area: hora; align-self: center; font-weight: 600; color: var(--primary); }
 .banner { position: absolute; top: 56px; left: var(--e3); right: var(--e3); display: flex; gap: var(--e3); align-items: center; text-align: left;
   background: var(--surface-2); border: 0; border-radius: var(--r-boton); padding: var(--e3); cursor: pointer; }
-.banner-marca { font: 800 12px/1 var(--fuente); letter-spacing: 0.08em; color: var(--primary); }
+.banner-marca { font: 600 12px/1 var(--fuente); letter-spacing: 0.08em; color: var(--primary); }
 .banner-cuerpo { display: flex; flex-direction: column; gap: 2px; color: var(--text); }
 .banner-cuerpo span { font: var(--pequeno); color: var(--text-2); }
 
@@ -240,6 +260,7 @@ body[data-pantalla="emergencia"] .barra-sup { background: var(--emergencia-bg); 
 .hoja { max-height: 84%; overflow-y: auto; }
 .lista-aclaraciones { margin: 0 0 var(--e2); padding-left: 18px; display: flex; flex-direction: column; gap: var(--e1); color: var(--text); }
 .tiempo-chico { font: var(--pequeno); color: var(--text-2); }
+.mono { font-family: var(--fuente-mono); font-weight: 500; }   /* cifras pequeñas: 0:31, 462 /s */
 .holo-instalacion { height: 180px; }
 .filas-icono { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .fila-icono { display: flex; align-items: center; gap: var(--e3); min-height: 48px; border-top: 1px solid var(--line); }

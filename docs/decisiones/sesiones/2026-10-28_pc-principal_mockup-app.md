@@ -135,3 +135,40 @@ Revisión visual de las capturas y cambios hechos:
 - **Pruebas actualizadas, sin cambiar criterios:**
   - la 7 busca "(simulación)" en la confirmación;
   - la 10 verifica las tres descripciones genéricas, sin nombres de clínicas.
+
+## Iteración 4 (mismo día): tipografía, tres efectos y menos texto
+- **Tipografía (ADR-0025 actualizada):**
+  - IBM Plex Sans 400/500/600 y, solo para cifras, IBM Plex Mono 500. Inter desinstalada.
+  - Geist se probó solo para la imagen comparativa (`mockup/pruebas/salida/comparacion_plex_geist.png`) y se desinstaló.
+  - Queda Plex salvo que Deisy elija otra.
+- **Emergencia:** el anillo late cada 1,6 s, con un halo difuso detrás y tres círculos tenues.
+  - Solo se animan transform y opacity. Con movimiento reducido, el brillo queda fijo.
+  - El halo es un anillo de luz con el centro oscuro, así que la cifra y el "!" no pierden contraste.
+- **Gemelo:**
+  - la figura ocupa el 87 % del alto de la tarjeta (medido);
+  - Fresnel más intenso y relleno más visible;
+  - una línea de escaneo recorre la figura en 3,2 s, cada 6 s;
+  - el aro del piso es más luminoso;
+  - en "Ejemplo", los pulmones laten en ámbar cada 1,5 s (brillo y tamaño).
+- **Señal, en MOVIMIENTO:**
+  - baldosas en rojo intenso, con el bloom de 0,6 a 1,25;
+  - la línea Huawei–placa pasa a ser un tubo rojo, con anillos rojos que se expanden desde ella;
+  - el borde de la figura se tiñe de rojo.
+  - En quietud vuelve al azul. Las baldosas siguen iluminándose solo a lo largo de la línea.
+  - El rojo sigue el mismo dato de K002 que el panel, que se corta en tramos cortos, así que también se corta.
+- **Menos texto:**
+  - la hoja ⓘ queda en las 4 líneas que pidió Deisy;
+  - en Asistente se quitó "Toca el orbe o elige una pregunta.";
+  - "muestras/s" sale de Señal y queda en el panel técnico;
+  - "Esquema ilustrativo" va pequeño en la esquina de la escena.
+- **Pruebas:**
+  - primera corrida 14/15, con la **prueba 2 FALLIDA**: la comprobación de fuentes no cargaba Plex Mono. Se corrigió la
+    comprobación, no el criterio, y la prueba 2 repetida pasa;
+  - quedan 10/10 criterios, la prueba de honestidad (reescrita para las 4 líneas, con el detalle de K002 verificado en
+    el panel técnico) y la nueva `pruebas/efectos.spec.js` con 4 pruebas;
+  - contraste: 288 textos ≥ 4,5:1; en el pico del latido, mínimo 7,14:1 (cálculo con el alfa del halo);
+  - fps estimados en la PC con CPU ×4: 60 en Hoy, Gemelo "Ejemplo", Señal en un cruce y Emergencia. La CPU frenada no
+    frena la GPU, así que en el celular sigue **no verificado**.
+- **Video:** `mockup/pruebas/salida/efectos/efectos_iteracion4.mp4` y `.gif` (24 s: Emergencia, Gemelo, Señal), fuera
+  de git.
+

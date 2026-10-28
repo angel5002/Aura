@@ -1,5 +1,6 @@
 // 6 · Emergencia — escenario "caída": cuenta regresiva de 45 s, "Estoy bien" / "Necesito ayuda".
 // Sin respuesta: "Familia avisada (simulación)", o Telegram solo si servidor.py está activo (lo envía él).
+// Iteración 4: el anillo late (halo difuso + tres círculos tenues, cada 1,6 s; base.css).
 import { escuchar, estado } from "../estado.js";
 import { responderEmergencia } from "../data/fuente.js";
 import { crearAnillo, crearCheck } from "../components/anillo.js";
@@ -10,7 +11,10 @@ export default {
   crear({ navegar, lanzarEscenario }) {
     const anillo = crearAnillo(196);
     const pregunta = el("div", { class: "emergencia-pregunta" },
-      el("div", { class: "anillo-centro" }, anillo.caja, el("span", { class: "signo", "aria-hidden": "true" }, "!")),
+      el("div", { class: "anillo-centro", "data-prueba": "latido" },
+        el("div", { class: "halo-latido", "aria-hidden": "true" }),
+        el("div", { class: "eco-latido", "aria-hidden": "true" }), el("div", { class: "eco-latido", "aria-hidden": "true" }), el("div", { class: "eco-latido", "aria-hidden": "true" }),
+        anillo.caja, el("span", { class: "signo", "aria-hidden": "true" }, "!")),
       el("h1", { class: "titulo centrado" }, "¿Estás bien?"),
       el("p", { class: "cuerpo centrado texto-2" }, "Hubo un movimiento brusco y luego quietud en la sala."),
       el("button", { class: "boton boton-claro ancho", type: "button", "data-prueba": "estoy-bien", onclick: () => responderEmergencia("bien") }, "Estoy bien"),

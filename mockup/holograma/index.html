@@ -97,7 +97,7 @@ const luz = new THREE.DirectionalLight(0xffffff, 0.5); luz.position.set(2, 4, 3)
 
 const VISTA = {
   senal: { dist: 5.6, incl: 40, az: -16, mira: new THREE.Vector3(0, 0.55, 0.0), hfov: 48 },
-  gemelo: { dist: 4.4, incl: 6, az: 0, mira: new THREE.Vector3(0, 0.92, 0), vfov: 30 },
+  gemelo: { dist: 3.62, incl: 7, az: 0, mira: new THREE.Vector3(0, 0.84, 0), vfov: 30 },   // iteración 4: figura ~90 % del alto
   instalacion: { dist: 3.1, incl: 24, az: 0, mira: new THREE.Vector3(0, 0.6, 0), hfov: 56 },
 }[MODO];
 function ponerCamara(azGrados) {
@@ -107,10 +107,18 @@ function ponerCamara(azGrados) {
   camara.lookAt(VISTA.mira);
 }
 
-// Material Fresnel de la figura (original): borde más brillante que el centro, sin esqueleto a la vista
+// Material Fresnel de la figura (original): borde más brillante que el centro, sin esqueleto a la vista.
+// Iteración 4: en el gemelo, borde mucho más intenso y relleno más visible, con una banda de escaneo (escY);
+// en señal, el borde se tiñe de rojo durante el movimiento (uniform "borde").
+const COLOR_FIG = new THREE.Color(MODO === "gemelo" ? 0x5cc8d6 : 0x3dffc0);
+const FRESNEL = MODO === "gemelo"
+  ? { opacidad: 0.85, exp: 1.8, relleno: 0.42, brillo: 2.8, alfaRelleno: 0.2, alfaBorde: 1.0 }
+  : { opacidad: 0.6, exp: 2.4, relleno: 0.22, brillo: 1.4, alfaRelleno: 0.05, alfaBorde: 0.7 };
 const matHolo = new THREE.ShaderMaterial({
   skinning: true, transparent: true, depthWrite: false, side: THREE.FrontSide,
-  uniforms: { color: { value: new THREE.Color(MODO === "gemelo" ? 0x5cc8d6 : 0x3dffc0) }, opacidad: { value: MODO === "gemelo" ? 0.55 : 0.6 } },
+  uniforms: { color: { value: COLOR_FIG.clone() }, borde: { value: COLOR_FIG.clone() }, opacidad: { value: FRESNEL.opacidad },
+    exponente: { value: FRESNEL.exp }, relleno: { value: FRESNEL.relleno }, brillo: { value: FRESNEL.brillo },
+    alfaRelleno: { value: FRESNEL.alfaRelleno }, alfaBorde: { value: FRESNEL.alfaBorde }, escY: { value: 0 }, escOn: { value: 0 } },
   vertexShader: `
     #include <common>
     #include <skinning_pars_vertex>
@@ -129,14 +137,15 @@ const matHolo = new THREE.ShaderMaterial({
       vY = (modelMatrix * vec4(transformed, 1.0)).y;
     }`,
   fragmentShader: `
-    uniform vec3 color; uniform float opacidad;
+    uniform vec3 color; uniform vec3 borde; uniform float opacidad, exponente, relleno, brillo, alfaRelleno, alfaBorde, escY, escOn;
     varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
     void main() {
       if (vCab > 0.5) discard;
-      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.4);
+      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), exponente);
       float pies = smoothstep(0.02, 0.3, vY);
-      vec3 c = color * (0.22 + 1.4 * f) * (0.35 + 0.65 * pies);
-      gl_FragColor = vec4(c, opacidad * (0.05 + 0.7 * f) * (0.4 + 0.6 * pies));
+      float banda = escOn * exp(-pow((vY - escY) / 0.03, 2.0));
+      vec3 c = mix(color, borde, smoothstep(0.15, 0.7, f)) * (relleno + brillo * f) * (0.35 + 0.65 * pies) + borde * 2.2 * banda;
+      gl_FragColor = vec4(c, min(1.0, opacidad * (alfaRelleno + alfaBorde * f) * (0.4 + 0.6 * pies) + 0.7 * banda));
     }`,
 });
 const figura = new THREE.Group();
@@ -178,7 +187,7 @@ function moverParticulas(t) {
 }
 
 // ---------- modo señal: sala de K002 (igual que el original) ----------
-let baldosas = null, enLinea = [], haz = null, cupulas = [], estela = [];
+let baldosas = null, enLinea = [], haz = null, cupulas = [], estela = [], tubo = null, ondasRojas = [], rojo = 0;   // rojo: 0 quieto · 1 movimiento (suavizado)
 const HUAWEI = new THREE.Vector3(-1, 1, 0), PLACA = new THREE.Vector3(1, 1, 0);
 function equipo(pos, color, tam, conPie = true) {
   const g = new THREE.Group();
@@ -223,6 +232,18 @@ if (MODO === "senal") {
   haz = new THREE.Line(new THREE.BufferGeometry().setFromPoints([HUAWEI, PLACA]),
                        new THREE.LineDashedMaterial({ color: 0x6fa8ff, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: 0.6 }));
   haz.computeLineDistances(); escena.add(haz);
+  // Iteración 4 (solo en MOVIMIENTO): la línea se vuelve un tubo rojo más grueso y de ella salen ondas rojas
+  tubo = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 2, 10, 1, true),
+                        new THREE.MeshBasicMaterial({ color: 0xff4a3d, transparent: true, opacity: 0, depthWrite: false }));
+  tubo.rotation.z = Math.PI / 2; tubo.position.set(0, 1, 0); escena.add(tubo);
+  // Onda: anillos finos perpendiculares a la línea, repartidos a lo largo de ella, que crecen y se desvanecen (2 frentes)
+  const geoAro = new THREE.TorusGeometry(1, 0.018, 6, 48);
+  for (let k = 0; k < 2; k++) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff4a3d, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const frente = new THREE.Group();
+    for (let j = 0; j < 7; j++) { const a = new THREE.Mesh(geoAro, mat); a.rotation.y = Math.PI / 2; a.position.x = -0.78 + j * 0.26; frente.add(a); }
+    frente.position.set(0, 1, 0); frente.userData.mat = mat; escena.add(frente); ondasRojas.push(frente);
+  }
   const geoCupula = new THREE.SphereGeometry(1, 28, 9, 0, Math.PI * 2, 0, Math.PI / 2);
   for (let i = 0; i < 3; i++) {
     const m = new THREE.Mesh(geoCupula, new THREE.MeshBasicMaterial({ color: 0x5a86ff, wireframe: true, transparent: true, opacity: 0.5, fog: false }));
@@ -250,20 +271,27 @@ const ORGANOS = {
 };
 const APAGADA = { color: new THREE.Color(0x7c8ba1), op: 0.07 }, ENCENDIDA = 0.75;
 const zonas = {};
-let linea = null, escaneoInicio = -1;
+let linea = null, escaneoInicio = performance.now();
+const ESCANEO = { ciclo: 6, barrido: 3.2 };            // iteración 4: una pasada lenta (3,2 s) cada 6 s
 if (MODO === "gemelo") {
   for (const [id, manchas] of Object.entries(ORGANOS)) {
-    zonas[id] = { sprites: [], color: APAGADA.color.clone(), objetivo: APAGADA.op, op: APAGADA.op };
+    zonas[id] = { sprites: [], color: APAGADA.color.clone(), objetivo: APAGADA.op, op: APAGADA.op, late: false };
     for (const [x, y, z, w, h] of manchas) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texPunto, color: APAGADA.color, transparent: true, opacity: APAGADA.op,
         depthWrite: false, depthTest: false }));
-      sp.scale.set(w * 1.6, h * 1.6, 1); sp.position.set(x, y, z); sp.renderOrder = 2;
+      sp.scale.set(w * 1.6, h * 1.6, 1); sp.position.set(x, y, z); sp.renderOrder = 2; sp.userData.escala = [w * 1.6, h * 1.6];
       figura.add(sp); zonas[id].sprites.push(sp);
     }
   }
-  const piso = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.45, 64), new THREE.MeshBasicMaterial({ color: 0x5cc8d6, transparent: true, opacity: 0.25 }));
-  piso.rotation.x = -Math.PI / 2; piso.position.y = 0.005; escena.add(piso);
-  linea = new THREE.Mesh(new THREE.RingGeometry(0.0, 0.5, 48), new THREE.MeshBasicMaterial({ color: 0x5cc8d6, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+  // Aro del piso más luminoso (iteración 4): aro nítido, aro exterior tenue y un resplandor plano
+  const plano = (geo, color, op, y, extra = {}) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false, ...extra }));
+    m.rotation.x = -Math.PI / 2; m.position.y = y; escena.add(m); return m;
+  };
+  plano(new THREE.PlaneGeometry(1.5, 1.5), 0x5cc8d6, 0.4, 0.003, { map: texPunto, blending: THREE.AdditiveBlending });
+  plano(new THREE.RingGeometry(0.4, 0.445, 72), 0x9eeaf2, 0.9, 0.005);
+  plano(new THREE.RingGeometry(0.53, 0.54, 72), 0x5cc8d6, 0.35, 0.005);
+  linea = new THREE.Mesh(new THREE.RingGeometry(0.0, 0.36, 48), new THREE.MeshBasicMaterial({ color: 0x9eeaf2, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
   linea.rotation.x = -Math.PI / 2; escena.add(linea);
   // Tocar una zona: se proyecta cada mancha a la pantalla y gana la más cercana (radio de 40 px)
   const zonaEn = (cx, cy) => {
@@ -279,23 +307,32 @@ if (MODO === "gemelo") {
   gl.addEventListener("click", (e) => { const id = zonaEn(e.clientX, e.clientY); if (id) parent.postMessage({ tipo: "zona_tocada", zona: id }, location.origin); });
   gl.addEventListener("pointermove", (e) => { gl.style.cursor = zonaEn(e.clientX, e.clientY) ? "pointer" : "default"; });
 }
-// La app manda {id: {color, nivel}}; nivel 0 = apagada ("sin medición"), 1 = encendida. Se llega con suavidad.
+// La app manda {id: {color, nivel, late}}; nivel 0 = apagada ("sin medición"), 1 = encendida. Se llega con suavidad.
+// late (iteración 4, escenario "Ejemplo"): la zona late con fuerza (brillo y tamaño, ciclo de 1,5 s).
 function ponerZonas(estados) {
   for (const [id, z] of Object.entries(zonas)) {
     const e = estados[id];
-    if (e && e.nivel > 0) { z.color.set(e.color); z.objetivo = APAGADA.op + (ENCENDIDA - APAGADA.op) * Math.min(1, e.nivel); }
-    else { z.color.copy(APAGADA.color); z.objetivo = APAGADA.op; }
+    if (e && e.nivel > 0) { z.color.set(e.color); z.objetivo = APAGADA.op + (ENCENDIDA - APAGADA.op) * Math.min(1, e.nivel); z.late = !!e.late; }
+    else { z.color.copy(APAGADA.color); z.objetivo = APAGADA.op; z.late = false; }
   }
 }
-function suavizarZonas() {
-  const k = REDUCIDO.matches ? 1 : 0.05;
+function suavizarZonas(t) {
+  const reducido = REDUCIDO.matches, k = reducido ? 1 : 0.05;
+  const pulso = reducido ? 0.6 : 0.5 + 0.5 * Math.sin(t * 2 * Math.PI / 1.5);
   for (const z of Object.values(zonas)) {
     z.op += (z.objetivo - z.op) * k;
-    for (const sp of z.sprites) { sp.material.color.lerp(z.color, k); sp.material.opacity = z.op; }
+    const encendida = (z.op - APAGADA.op) / (ENCENDIDA - APAGADA.op);           // 0..1 (suave al encender)
+    const late = z.late ? Math.max(0, encendida) : 0;
+    for (const sp of z.sprites) {
+      sp.material.color.lerp(z.color, k);
+      sp.material.opacity = Math.min(1, z.op * (1 + late * (0.55 * pulso - 0.1)));
+      const e = 1 + late * (0.12 + 0.3 * pulso);
+      sp.scale.set(sp.userData.escala[0] * e, sp.userData.escala[1] * e, 1);
+    }
   }
   halo.material.opacity += (haloObjetivo - halo.material.opacity) * (REDUCIDO.matches ? 1 : 0.04);
 }
-function escanear() { escaneoInicio = performance.now(); }
+function escanear() { escaneoInicio = performance.now(); }   // empieza una pasada ya (y sigue el ciclo de 6 s)
 
 const cargaFigura = MODO === "instalacion" ? Promise.resolve() : new Promise((ok, mal) => {
   new THREE.GLTFLoader().load("modelos/quaternius_animated_human.glb", (g) => {
@@ -339,7 +376,8 @@ const cargaFigura = MODO === "instalacion" ? Promise.resolve() : new Promise((ok
 const compositor = new THREE.EffectComposer(renderer);
 compositor.addPass(new THREE.RenderPass(escena, camara));
 // brillo difuso y de baja intensidad (iteración 2)
-const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), MODO === "senal" ? 0.6 : 0.45, 0.6, 0.2);
+const BLOOM = { senal: 0.6, gemelo: 0.75, instalacion: 0.45 }[MODO], BLOOM_MOV = 1.25;   // señal en MOVIMIENTO: más bloom
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), BLOOM, 0.6, 0.2);
 compositor.addPass(bloom);
 compositor.addPass(new THREE.ShaderPass({
   uniforms: { tDiffuse: { value: null }, fuerza: { value: 1.15 } },
@@ -364,7 +402,8 @@ addEventListener("resize", ajustar);
 ajustar();
 
 // ---------- animación ----------
-const COL_BASE = new THREE.Color(0x0b1a16), COL_MOV = new THREE.Color(0xf07a6a), COL_QUIETO = new THREE.Color(0x1e8cff);
+const COL_BASE = new THREE.Color(0x0b1a16), COL_MOV = new THREE.Color(0xff3b2f), COL_QUIETO = new THREE.Color(0x1e8cff);
+const COL_BORDE_MOV = new THREE.Color(0xff4a3d), COL_HAZ_QUIETO = new THREE.Color(0x6fa8ff);
 const tmpCol = new THREE.Color();
 let cuadros = 0, fpsMedido = 0, ultimoFps = performance.now();
 function actualizar(ahora) {
@@ -375,12 +414,24 @@ function actualizar(ahora) {
     if (D) {
       const i = idx(t), mov = D.mov[i] === 1;
       const brillo = Math.min(1.4, D.suave[i] / Math.max(D.entrada[i], 1e-6)) / 1.4;
-      const fuerza = mov ? 0.45 + 0.55 * brillo : 0.12 + 0.45 * brillo;
+      const fuerza = mov ? 0.8 + 0.2 * brillo : 0.12 + 0.45 * brillo;
       tmpCol.copy(COL_BASE).lerp(mov ? COL_MOV : COL_QUIETO, fuerza);
+      // Solo las baldosas a lo largo de la línea Huawei–placa: nunca un foco bajo la persona
       for (let k = 0; k < enLinea.length; k++) baldosas.setColorAt(k, enLinea[k] ? tmpCol : COL_BASE);
       baldosas.instanceColor.needsUpdate = true;
-      haz.material.color.set(mov ? 0xff6b6b : 0x6fa8ff);
+      rojo += ((mov ? 1 : 0) - rojo) * (reducido ? 1 : 0.3);   // sigue el mismo dato que baldosas y panel, con fundido corto (~0,1 s)
     }
+    // MOVIMIENTO: tubo rojo grueso, ondas rojas desde la línea, borde rojo de la figura y más bloom; quieto: azul
+    haz.material.color.copy(COL_HAZ_QUIETO); haz.material.opacity = 0.6 * (1 - rojo);
+    tubo.material.opacity = 0.95 * rojo;
+    ondasRojas.forEach((o, k) => {
+      const q = reducido ? 0.35 + 0.3 * k : (t * 0.9 + k * 0.5) % 1;
+      const r = 0.05 + 0.6 * q;
+      o.children.forEach((a) => a.scale.set(r, r, r));
+      o.userData.mat.opacity = 0.9 * rojo * (1 - q) ** 1.5;
+    });
+    matHolo.uniforms.borde.value.copy(COLOR_FIG).lerp(COL_BORDE_MOV, rojo);
+    bloom.strength = BLOOM + (BLOOM_MOV - BLOOM) * rojo;
     cupulas.forEach((m, k) => {
       const r = 0.35 + (((reducido ? 1.2 : t) * 0.6 + k * 1.1) % 3.3);
       m.scale.setScalar(r); m.material.opacity = 0.42 * (1 - r / 3.65);
@@ -406,11 +457,14 @@ function actualizar(ahora) {
     figura.rotation.y = reducido ? 0 : 0.35 * Math.sin(t * 2 * Math.PI / 14);
     if (mezclador) { accCaminar.setEffectiveWeight(0); accQuieto.setEffectiveWeight(1); accQuieto.time = reducido ? 0 : (t * 0.8) % accQuieto.getClip().duration; mezclador.update(0); }
     moverParticulas(reducido ? 0 : t);
-    suavizarZonas();
-    if (escaneoInicio >= 0) {                       // línea de escaneo de arriba abajo, una vez (1,6 s)
-      const s = (ahora - escaneoInicio) / 1600;
-      if (s >= 1 || reducido) { linea.material.opacity = 0; escaneoInicio = -1; }
-      else { linea.position.y = 1.85 * (1 - s); linea.material.opacity = 0.25 * Math.sin(Math.PI * s); }
+    suavizarZonas(t);
+    // Línea de escaneo: recorre la figura de arriba abajo, lento (3,2 s), cada 6 s. Con movimiento reducido, no hay.
+    const s = (((ahora - escaneoInicio) / 1000) % ESCANEO.ciclo) / ESCANEO.barrido;
+    if (s >= 1 || reducido) { linea.material.opacity = 0; matHolo.uniforms.escOn.value = 0; }
+    else {
+      const y = 1.82 * (1 - s), intensidad = Math.sin(Math.PI * s) ** 0.5;
+      linea.position.y = y; linea.material.opacity = 0.22 * intensidad;
+      matHolo.uniforms.escY.value = y; matHolo.uniforms.escOn.value = intensidad;
     }
   }
   compositor.render();
@@ -425,7 +479,10 @@ function bucle(ahora) {
 
 // Interfaz mínima para la app y las pruebas
 window.AURA_ESCENA = { modo: MODO, fps: () => fpsMedido, pausado: () => pausado, reducido: () => REDUCIDO.matches, listo: cargaFigura,
-  zonas: () => Object.fromEntries(Object.entries(zonas).map(([id, z]) => [id, { op: Math.round(z.op * 100) / 100, color: "#" + z.color.getHexString() }])) };
+  // fracción del alto del lienzo que ocupa la figura de 1,70 m (gemelo)
+  alturaFigura: () => { const a = new THREE.Vector3(0, 0, 0).project(camara), b = new THREE.Vector3(0, 1.7, 0).project(camara); return Math.round((b.y - a.y) / 2 * 100) / 100; },
+  efectos: () => ({ rojo:Math.round(rojo * 100) / 100, bloom: Math.round(bloom.strength * 100) / 100, escaneo: Math.round(matHolo.uniforms.escOn.value * 100) / 100 }),
+  zonas: () => Object.fromEntries(Object.entries(zonas).map(([id, z]) => [id, { op: Math.round(z.op * 100) / 100, dibujo: Math.round(z.sprites[0].material.opacity * 100) / 100, color: "#" + z.color.getHexString() }])) };
 
 const datos = MODO === "senal"
   ? fetch("../datos/k002_reproduccion.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)

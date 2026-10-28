@@ -97,8 +97,9 @@ test("1 · recorrido de las 9 pantallas, capturas y desbordes", async ({ page })
   for (const [id, malos] of Object.entries(informe)) expect(malos, `desbordes en ${id}`).toEqual([]);
 });
 
-// ---------- 2 · sin internet, Inter local, modo demo activo ----------
-test("2 · funciona sin internet desde app/ con Inter local y modo demo", async ({ page }) => {
+// ---------- 2 · sin internet, fuentes locales, modo demo activo ----------
+// Iteración 4: la fuente local pasa de Inter a IBM Plex Sans + IBM Plex Mono (ADR-0025); el criterio no cambia.
+test("2 · funciona sin internet desde app/ con fuentes locales y modo demo", async ({ page }) => {
   const externas = await sinInternet(page);
   const fuentes = [];
   page.on("request", (r) => { if (r.resourceType() === "font") fuentes.push(new URL(r.url()).hostname); });
@@ -106,7 +107,11 @@ test("2 · funciona sin internet desde app/ con Inter local y modo demo", async 
   expect(externas, "peticiones fuera de localhost").toEqual([]);
   expect(fuentes.length).toBeGreaterThan(0);
   expect(new Set(fuentes)).toEqual(new Set(["localhost"]));
-  expect(await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check("600 16px Inter"); })).toBe(true);
+  // Plex Mono solo se descarga en pantallas con cifras: se pide cada cara explícitamente (y se comprueba que vino de
+  // localhost, por la lista "fuentes" de arriba). La primera corrida de la iteración 4 FALLÓ por usar check() sin cargar.
+  expect(await page.evaluate(async () => Promise.all(["400 16px 'IBM Plex Sans'", "600 16px 'IBM Plex Sans'", "500 16px 'IBM Plex Mono'"]
+    .map(async (f) => (await document.fonts.load(f, "0:45")).some((c) => c.status === "loaded"))))).toEqual([true, true, true]);
+  expect(new Set(fuentes)).toEqual(new Set(["localhost"]));
   expect(await page.evaluate(() => window.__aura.estado.fuente)).toBe("demo");
   // Los HTML compilados no cargan nada de un CDN
   for (const [f, t] of textoCompilado().filter(([f]) => f.endsWith(".html"))) expect(t, f).not.toMatch(/cdnjs|jsdelivr|unpkg|googleapis/);
@@ -117,10 +122,13 @@ test("3 · cuadros por segundo (estimado en la PC, CPU frenada ×4)", async ({ p
   await sinInternet(page);
   const cdp = await page.context().newCDPSession(page);
   const res = {};
-  for (const id of ["hoy", "gemelo", "senal"]) {
+  // Iteración 4: se agregan Emergencia (latido) y se mide Gemelo en "Ejemplo" (pulmones + escaneo) y Señal en movimiento
+  for (const id of ["hoy", "gemelo", "senal", "emergencia"]) {
     await abrir(page, id);
+    if (id === "gemelo") { await page.locator("[data-prueba=modo-escenario]").click(); await page.waitForTimeout(800); }
     for (const freno of [1, 4]) {
       await cdp.send("Emulation.setCPUThrottlingRate", { rate: freno });
+      if (id === "senal") await page.evaluate(() => window.__aura.irA(29.2));   // la medición cae sobre el cruce (rojo)
       await page.waitForTimeout(1000);
       const r = await page.evaluate(async () => {
         let n = 0; const t0 = performance.now();
@@ -128,7 +136,8 @@ test("3 · cuadros por segundo (estimado en la PC, CPU frenada ×4)", async ({ p
         const fr = document.querySelector("iframe.holograma")?.contentWindow;
         let gpu = null;
         if (fr) { const c = fr.document.querySelector("canvas").getContext("webgl2") || fr.document.querySelector("canvas").getContext("webgl"); const x = c?.getExtension("WEBGL_debug_renderer_info"); gpu = x ? c.getParameter(x.UNMASKED_RENDERER_WEBGL) : null; }
-        return { fps_pagina: Math.round((n * 1000) / (performance.now() - t0) * 10) / 10, fps_escena: fr ? Math.round(fr.AURA_ESCENA.fps() * 10) / 10 : null, gpu };
+        const rojo = fr?.AURA_ESCENA.efectos?.().rojo ?? null;
+        return { rojo, fps_pagina: Math.round((n * 1000) / (performance.now() - t0) * 10) / 10, fps_escena: fr ? Math.round(fr.AURA_ESCENA.fps() * 10) / 10 : null, gpu };
       });
       res[`${id}_cpu_x${freno}`] = r;
     }
@@ -300,8 +309,10 @@ test("10 · sin RuView y con clínicas ficticias", async ({ page }) => {
   expect(lugares).toEqual(["Medicina general · videollamada", "Policlínico cercano", "Centro de salud del distrito"]);
 });
 
-// ---------- honestidad (iteración 3, no es uno de los 10 criterios): lo que salió de las pantallas está en la hoja ⓘ ----------
-test("honestidad · la hoja ⓘ conserva todas las aclaraciones, en frases de 12 palabras o menos", async ({ page }) => {
+// ---------- honestidad (no es uno de los 10 criterios) ----------
+// Iteración 4: la hoja ⓘ queda en las 4 líneas que pidió Deisy; el detalle de K002 vive en el panel técnico y el 106
+// en Emergencia. Se comprueba que nada de eso se perdió y que ninguna frase pasa de 12 palabras.
+test("honestidad · hoja ⓘ de 4 líneas; el detalle de K002 sigue en el panel técnico", async ({ page }) => {
   await sinInternet(page);
   for (const id of PANTALLAS) {
     await abrir(page, id);
@@ -311,9 +322,21 @@ test("honestidad · la hoja ⓘ conserva todas las aclaraciones, en frases de 12
   await page.locator("[data-prueba=abrir-info]").click();
   const hoja = page.locator("[data-prueba=hoja-aclaraciones]");
   await expect(hoja).toBeVisible();
-  for (const t of ["K002", "27/10/2026", "firmware 0.1.3", "una sola sala", "10 de 10", "no hay un sensor en vivo",
-    "aún no se miden", "ejemplo", "prototipo sin validar", "simulado", "no capta forma ni postura", "esquema",
-    "no diagnostica", "no reemplaza a tu médico", "106 (SAMU)", "guion fijo"]) await expect(hoja, t).toContainText(t);
-  for (const f of await hoja.locator("li").allTextContents()) expect(f.trim().split(/\s+/).length, f).toBeLessThanOrEqual(12);
+  const lineas = (await hoja.locator("li").allTextContents()).map((f) => f.trim());
+  expect(lineas).toEqual(["Real: el movimiento (prueba K002, 27/10).", "Ejemplo: respiración, sueño, corazón, ánimo y caídas.",
+    "Simulado: avisos, teleconsulta y asistente.", "AURA no diagnostica ni reemplaza a tu médico."]);
+  for (const f of lineas) expect(f.split(/\s+/).length, f).toBeLessThanOrEqual(12);
   expect(await page.locator("#pantalla").innerText()).not.toMatch(/frente a tu normal/i);
+  await abrir(page, "dispositivo");
+  await page.locator("[data-prueba=abrir-panel]").click();
+  const panel = page.locator("[data-prueba=panel-tecnico]");
+  for (const t of ["K002 · 27/10/2026", "0.1.3", "una sola sala", "10 de 10", "Muestras"]) await expect(panel, t).toContainText(t);
+  await expect(page.locator("[data-prueba=panel-tecnico] dd").nth(10)).toHaveText(/\d+ \/s/);   // muestras/s salió de Señal
+  await abrir(page, "emergencia");
+  await expect(page.locator("#pantalla")).toContainText("106 (SAMU)");
+  await abrir(page, "senal");
+  await expect(page.locator(".holo-caja .esquina-escena")).toHaveText("Esquema ilustrativo");
+  expect(await page.locator("#pantalla").innerText()).not.toMatch(/muestras\/s/);
+  await abrir(page, "asistente");
+  expect(await page.locator("#pantalla").innerText()).not.toContain("Toca el orbe o elige una pregunta.");
 });

@@ -3,9 +3,12 @@
    cuadrícula a la mitad, bordes tenues, títulos en 600. Contraste medido (WCAG 2.1, mínimos):
    primary 7,82 · ok 8,09 · warn 7,86 · danger 5,63 · text-2 6,00 sobre surface-2; pastillas (color al 14 % de fondo)
    ≥ 4,61:1. muted NO va como texto sobre surface-2 (4,44:1). */
-@import "@fontsource/inter/latin-400.css";
-@import "@fontsource/inter/latin-600.css";
-@import "@fontsource/inter/latin-800.css";
+/* Tipografía (iteración 4, ADR-0025): IBM Plex Sans 400/500/600 para títulos y texto; IBM Plex Mono 500 solo para
+   cifras (temporizador, 1/10, 0:31). Ambas OFL 1.1, locales vía Fontsource (subconjunto latin). */
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
 
 :root {
   /* colores */
@@ -25,9 +28,10 @@
   --emergencia-bg: #1a0709;     /* fondo sólido de la pantalla de emergencia (para medir contraste) */
 
   /* tipografía */
-  --fuente: "Inter", system-ui, sans-serif;
-  --marca: 800 40px/1 var(--fuente);
-  --cifra: 600 34px/1.1 var(--fuente);
+  --fuente: "IBM Plex Sans", system-ui, sans-serif;
+  --fuente-mono: "IBM Plex Mono", ui-monospace, monospace;   /* solo cifras */
+  --marca: 600 40px/1 var(--fuente);
+  --cifra: 500 34px/1.1 var(--fuente-mono);
   --titulo: 600 22px/1.25 var(--fuente);
   --frase: 600 26px/1.2 var(--fuente);
   --etiqueta: 500 11px/1.3 var(--fuente);   /* mayúsculas espaciadas: una sola por pantalla */

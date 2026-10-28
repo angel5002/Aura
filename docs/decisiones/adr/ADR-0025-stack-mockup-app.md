@@ -133,3 +133,21 @@ las pastillas con fondo tenue ≥ 4,61:1. La pastilla gris usa `text-2`, porque 
 
 **7. Pruebas:** 10/10 de nuevo. Los 45 fps en el celular siguen **no verificados**. Estimado en la PC: 60 fps en Hoy,
 Gemelo y Señal, también con la CPU frenada ×4.
+
+## Actualización 2026-10-28 (iteración 4): cambio de tipografía
+
+**Decisión de Deisy:** se reemplaza **Inter** por **IBM Plex Sans** (títulos y texto, pesos 400/500/600) e **IBM Plex
+Mono** solo para cifras (temporizador de Emergencia, "1 / 10" y "0:31" de Señal). Así queda sin efecto la tipografía
+del punto 2 de la decisión. Lo demás del stack no cambia.
+
+- Paquetes (instalados con su confirmación, todo local en `C:\aura\mockup`): `@fontsource/ibm-plex-sans@5.3.0` y
+  `@fontsource/ibm-plex-mono@5.3.0`, ambos SIL OFL 1.1, subconjunto latín. Se desinstaló `@fontsource/inter`.
+- Se cargan: Plex Sans 400, 500 y 600, y Plex Mono 500. El logo "AURA" pasa de 800 a 600, porque Plex se usa solo
+  en 400, 500 y 600.
+- **Alternativa evaluada: Geist + Geist Mono** (`@fontsource/geist@5.3.0`, `@fontsource/geist-mono@5.3.0`, OFL 1.1).
+  Se instaló solo para una imagen que compara Hoy y Emergencia con Plex y con Geist
+  (`mockup/pruebas/salida/comparacion_plex_geist.png`, fuera de git), y se desinstaló después. Regla acordada con
+  Deisy: si no elige otra, queda Plex.
+- La prueba 2 ("sin internet con fuentes locales") ahora comprueba que carguen IBM Plex Sans 400 y 600 e IBM Plex Mono
+  500 desde localhost, en vez de Inter. El criterio no cambia.
+
