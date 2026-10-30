@@ -80,3 +80,6 @@ docs/mockup/referencias/
 
 # --- Herramientas locales instaladas aparte (entornos y modelos; p. ej. rembg para el video del equipo) ---
 herramientas/
+
+# --- Especificación del mockup: queda solo en local (pantallas conceptuales con nombre de clínica y cifras de salud) ---
+docs/mockup/AURA_mockup_especificacion.pdf
