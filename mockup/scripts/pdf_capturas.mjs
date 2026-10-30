@@ -6,12 +6,16 @@
 // bienestar_video), arma una página HTML (fondo #05080F, IBM Plex; portada + 3 capturas por página) y la exporta con
 // page.pdf de Playwright. --jpeg: imágenes JPEG 85 (si el PDF pasa de 15 MB se hace solo). Todo local.
 import { execSync } from "node:child_process";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { MOCKUP, servirMockup } from "../video/servidor.mjs";
 
 const PUERTO = 4187, BASE = `http://127.0.0.1:${PUERTO}`;
+// Enlace público (GitHub Pages) y su QR (mockup/scripts/qr_pages.svg, hecho con segno 1.6.6: corrección M, módulos navy
+// sobre blanco con margen de 4 módulos)
+const PAGES = "https://angel5002.github.io/Aura/";
+const QR = readFileSync(resolve(MOCKUP, "scripts", "qr_pages.svg"), "utf8");
 const SALIDA = resolve(MOCKUP, "..", "docs", "mockup", "AURA_mockup_capturas.pdf");
 const PANTALLAS = [["inicio", "Inicio"], ["hoy", "Hoy"], ["asistente", "Asistente"], ["gemelo", "Gemelo"], ["senal", "Señal"],
   ["alerta", "Alerta"], ["emergencia", "Emergencia"], ["teleconsulta", "Teleconsulta"], ["dispositivo", "Dispositivo"]];
@@ -61,13 +65,18 @@ function html(fotos) {
     .portada h1 { font: 600 40pt/1.1 "IBM Plex Sans"; letter-spacing: .04em; margin: 0; }
     .portada .dato { font: 400 14pt/1.4 "IBM Plex Sans"; color: #94a3b8; margin: 0; }
     .portada .aviso { font: 400 13pt/1.5 "IBM Plex Sans"; color: #e8b04a; max-width: 200mm; margin: 6mm 0 0; }
+    .enlace { display: flex; align-items: center; gap: 8mm; margin-top: 8mm; text-align: left; }
+    .enlace svg { width: 46mm; height: 46mm; display: block; border-radius: 2mm; }
+    .enlace p { margin: 0; font: 400 12pt/1.5 "IBM Plex Sans"; color: #94a3b8; }
+    .enlace a { font: 600 15pt/1.4 "IBM Plex Sans"; color: #5cc8d6; text-decoration: none; }
     .capturas { gap: 14mm; }
     figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4mm; }
     figure img { height: 172mm; border-radius: 4mm; border: .3mm solid rgba(92,200,214,.35); }
     figcaption { font: 600 12pt/1.3 "IBM Plex Sans"; color: #5cc8d6; text-align: center; max-width: 80mm; }
   </style></head><body>
   <section class="hoja portada"><h1>AURA · Mockup de la app</h1><p class="dato">${hoy} · commit ${commit}</p>
-    <p class="aviso">Mockup con datos de demostración y escenarios simulados; solo la reproducción de K002 usa datos reales.</p></section>
+    <p class="aviso">Mockup con datos de demostración y escenarios simulados; solo la reproducción de K002 usa datos reales.</p>
+    <div class="enlace">${QR}<div><p>Pruébalo en el navegador del celular:</p><a href="${PAGES}">${PAGES.replace("https://", "")}</a></div></div></section>
   ${grupos.map((g) => `<section class="hoja capturas">${g.map((f) => `<figure><img src="${f.src}"><figcaption>${f.nombre}</figcaption></figure>`).join("")}</section>`).join("")}
   </body></html>`;
 }

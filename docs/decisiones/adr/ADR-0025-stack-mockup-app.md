@@ -175,3 +175,9 @@ desarrollo".
 - **Palabras vetadas en pantalla:** aislamiento, aislada, depresión, soledad, riesgo emocional, diagnóstico, salud
   mental, calidad del sueño, sueño profundo, REM, fases y respiraciones/min.
 - **Prueba:** todo lo anterior lo comprueba `mockup/pruebas/escenarios_video.spec.js`.
+
+## Actualización 2026-10-29: app publicada en GitHub Pages
+- La app compilada se publica en https://angel5002.github.io/Aura/ (rama gh-pages; mockup/scripts/publicar_pages.mjs).
+- **Con la reproducción K002**, por autorización explícita de Deisy (29/10/2026). Esto reemplaza lo dicho en
+  Consecuencias de que la copia sale del equipo solo con autorización: la autorización está dada para Pages.
+- mockup/app/ sigue fuera de main; solo la rama gh-pages lleva la compilación.
