@@ -77,3 +77,6 @@ docs/mockup/referencias/
 # Ningún video entra a git
 *.mp4
 # node_modules, app/ (compilado con datos de K002), publico/ y pruebas/salida/: ver mockup/.gitignore
+
+# --- Herramientas locales instaladas aparte (entornos y modelos; p. ej. rembg para el video del equipo) ---
+herramientas/

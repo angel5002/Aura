@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>AURA · equipo (video con chroma)</title>
+<!--
+  equipo.html — presentación del equipo AURA para chroma key (1920 × 1080, 60 fps, 15 s). La página es TRANSPARENTE:
+  video/renderizar_equipo.mjs la captura con omitBackground y compone el verde #00B140 con ffmpeg (MP4) o deja el alfa
+  (ProRes 4444). Sobre el verde no hay opacidades parciales, desvanecidos, sombras, brillos ni desenfoques: las
+  tarjetas son opacas, el fondo y el borde se dibujan sin antialiasing (crispEdges), todas las posiciones y recortes
+  son píxeles enteros y pares (así el submuestreo 4:2:0 del MP4 no mezcla el borde con el verde) y las transiciones
+  son un barrido con una barra cian sólida. Las fotos (datos personales) NO están en el repositorio: el script las
+  sirve desde datos/procesados/video_equipo/fotos_listas/ en /fotos-equipo/. Una línea de tiempo GSAP en pausa;
+  window.__setTime(t) dibuja un cuadro.
+-->
+<link rel="stylesheet" href="../node_modules/@fontsource/ibm-plex-sans/latin-400.css">
+<link rel="stylesheet" href="../node_modules/@fontsource/ibm-plex-sans/latin-600.css">
+<style>
+  html, body { margin: 0; background: transparent; }
+  body { width: 1920px; height: 1080px; overflow: hidden; position: relative; font-family: "IBM Plex Sans", sans-serif; }
+  .tarjeta { position: absolute; box-sizing: border-box; padding: 40px 56px 48px; display: flex; flex-direction: column; align-items: center;
+    text-align: center; color: #f1f5f9; }
+  .tarjeta > svg { position: absolute; inset: 0; z-index: 0; }
+  .tarjeta > :not(svg) { position: relative; z-index: 1; }
+  .marca { align-self: flex-start; font: 600 18px/1 "IBM Plex Sans"; letter-spacing: 0.2em; color: #5cc8d6; margin: 0 0 8px; }
+  .foto { width: 340px; height: 340px; border-radius: 50%; box-sizing: border-box; border: 4px solid #5cc8d6; background: #fff; overflow: hidden; }
+  .foto img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .eyebrow { margin: 34px 0 0; font: 600 20px/1.2 "IBM Plex Sans"; letter-spacing: 0.16em; text-transform: uppercase; color: #5cc8d6; }
+  .nombre { margin: 12px 0 0; font: 600 46px/1.15 "IBM Plex Sans"; letter-spacing: 0.01em; }
+  .texto { margin: 16px 0 0; font-weight: 400; line-height: 1.38; color: #c3ccd8; text-wrap: balance; }   /* 2 líneas equilibradas */
+  .barra { position: absolute; top: 0; height: 1080px; width: 24px; background: #5cc8d6; left: -100px; }
+  .barra-fina { position: absolute; top: 0; height: 1080px; width: 8px; background: #5cc8d6; left: -100px; }
+</style>
+</head>
+<body>
+<div class="barra" id="barra"></div><div class="barra-fina" id="barra-fina"></div>
+<script type="module">
+import { gsap } from "../node_modules/gsap/index.js";
+
+// Textos exactos del equipo (sin cargos ni logros agregados)
+const EQUIPO = {
+  josue: { nombre: "JOSUÉ LOVATÓN", eyebrow: "CRECIMIENTO Y ESTRATEGIA", texto: "Cofundador y CMO de una startup de coaching con IA. Diseña la estrategia de crecimiento de AURA." },
+  hideki: { nombre: "HIDEKI FUKUHARA", eyebrow: "ALGORITMO E INVESTIGACIÓN", texto: "Desarrolla el algoritmo de detección y evalúa nuevas oportunidades de investigación." },
+  angel: { nombre: "ANGEL VARGAS", eyebrow: "SOFTWARE Y DATOS", texto: "Automatización, aplicaciones web y bases de datos. Coautor de dos programas registrados en INDECOPI." },
+  ida_luz: { nombre: "IDA LUZ CUMPA", eyebrow: "ÉTICA Y PRIVACIDAD", texto: "Evalúa la gestión de la privacidad de AURA desde la ética. Docente y doctoranda en Humanidades." },
+};
+const DURACION = 15, ALTO = 1080;
+const par = (v) => Math.round(v / 2) * 2;                // todo en píxeles pares (bordes nítidos también en 4:2:0)
+const NS = "http://www.w3.org/2000/svg";
+
+function tarjeta(id, ancho) {
+  const p = EQUIPO[id];
+  const t = document.createElement("section");
+  t.className = "tarjeta"; t.id = `t-${id}`; t.style.width = `${ancho}px`;
+  t.innerHTML = `<p class="marca">AURA</p><div class="foto"><img alt="" src="/fotos-equipo/${id}.png"></div>
+    <p class="eyebrow"></p><h1 class="nombre"></h1><p class="texto"></p>`;
+  t.querySelector(".eyebrow").textContent = p.eyebrow;
+  t.querySelector(".nombre").textContent = p.nombre;
+  t.querySelector(".texto").textContent = p.texto;
+  document.body.insertBefore(t, document.getElementById("barra"));
+  return t;
+}
+// Descripción en 2 líneas equilibradas (text-wrap: balance): si no entra en 2, se achica la letra (nunca se corta)
+const lineas = (e, px) => Math.round(e.getBoundingClientRect().height / (px * 1.38));
+function ajustarTexto(t) {
+  const e = t.querySelector(".texto");
+  for (let px = 26; px >= 16; px--) {
+    e.style.fontSize = `${px}px`;
+    if (lineas(e, px) <= 2) return { px, lineas: lineas(e, px), caracteres: e.textContent.length };
+  }
+  return { px: 16, lineas: lineas(e, 16), caracteres: e.textContent.length };
+}
+// Rectángulo redondeado como polígono escalonado con TODOS los vértices en coordenadas pares (escalones de 2 px):
+// sin antialiasing y alineado a los bloques 2×2 del 4:2:0, así ninguna esquina mezcla la tarjeta con el verde
+function escalera(x0, y0, w, h, r) {
+  const pasos = [];
+  for (let y = 0; y <= r; y += 2) pasos.push([par(r - Math.sqrt(Math.max(0, r * r - (r - y) ** 2))), y]);   // [dx, dy] de la esquina
+  // recorrido: arriba-izq → arriba-der → abajo-der → abajo-izq, con escalones horizontales/verticales entre puntos
+  const sup = pasos.map(([dx, dy]) => [x0 + dx, y0 + dy]).reverse();          // de (x0+0, y0+r) a (x0+r', y0)
+  const supD = pasos.map(([dx, dy]) => [x0 + w - dx, y0 + dy]);              // de (x0+w-r', y0) a (x0+w, y0+r)
+  const infD = pasos.map(([dx, dy]) => [x0 + w - dx, y0 + h - dy]).reverse(); // de (x0+w, y0+h-r) a (x0+w-r', y0+h)
+  const infI = pasos.map(([dx, dy]) => [x0 + dx, y0 + h - dy]);              // de (x0+r', y0+h) a (x0, y0+h-r)
+  const todo = [...sup, ...supD, ...infD, ...infI];
+  let d = "", prev = null;
+  for (const [x, y] of todo) {                    // solo tramos horizontales y verticales: escalones exactos
+    if (!prev) d += `M${x} ${y}`;
+    else { if (x !== prev[0]) d += `H${x}`; if (y !== prev[1]) d += `V${y}`; }
+    prev = [x, y];
+  }
+  return d + "Z";
+}
+// Fondo navy y borde cian de 2 px, sin antialiasing
+function fondo(t, alto) {
+  const w = t.offsetWidth, s = document.createElementNS(NS, "svg");
+  s.setAttribute("width", w); s.setAttribute("height", alto); s.setAttribute("shape-rendering", "crispEdges");
+  s.innerHTML = `<path d="${escalera(0, 0, w, alto, 16)}" fill="#5cc8d6"/><path d="${escalera(2, 2, w - 4, alto - 4, 14)}" fill="#05080f"/>`;
+  t.prepend(s); t.style.height = `${alto}px`;
+}
+// Todas las tarjetas: mismo ancho, mismo alto (el mayor, par) y misma posición vertical, centradas
+function colocar(lefts) {
+  const ts = Object.values(tarjetas), alto = par(Math.max(...ts.map((t) => t.offsetHeight)) + 1), top = par((ALTO - alto) / 2);
+  for (const [id, t] of Object.entries(tarjetas)) { fondo(t, alto); Object.assign(t.style, { left: `${lefts[id]}px`, top: `${top}px` }); }
+  return { alto, top };
+}
+
+const tl = gsap.timeline({ paused: true });          // entradas (y); el barrido se calcula aparte, como función pura de t
+const barra = document.getElementById("barra"), fina = document.getElementById("barra-fina");
+const curva = gsap.parseEase("power1.inOut");
+let tarjetas = {};
+const barridos = [];                                  // [{ salen: [ids], t0, dur }]
+// Entrada: sube desde abajo, opaca, en pasos de 2 px
+function entrar(id, t0) { tl.fromTo(tarjetas[id], { y: ALTO }, { y: 0, duration: 0.36, ease: "power3.out", snap: { y: 2 }, immediateRender: false }, t0); }
+// Salida: una barra cian sólida barre de izquierda a derecha y la tarjeta desaparece detrás de ella (recorte entero)
+function barrer(salen, t0, dur) { barridos.push({ salen, t0, dur }); }
+const xBarra = (b, t) => par(-60 + 2040 * curva(Math.min(1, Math.max(0, (t - b.t0) / b.dur))));
+
+async function preparar() {
+  await document.fonts.ready;
+  const ANCHO_T = 820, CENTRO = par((1920 - ANCHO_T) / 2);
+  tarjetas = Object.fromEntries(Object.keys(EQUIPO).map((id) => [id, tarjeta(id, ANCHO_T)]));
+  await Promise.all([...document.images].map((i) => i.decode()));
+  const letra = Object.fromEntries(Object.entries(tarjetas).map(([id, t]) => [id, ajustarTexto(t)]));
+  const caja = colocar({ josue: CENTRO, hideki: 100, angel: 1000, ida_luz: CENTRO });   // par: 100 y 1000 (centrado)
+  // GUION
+  entrar("josue", 0.0);                                  // 0,0–4,0 Josué
+  barrer(["josue"], 4.0, 0.6);                           // 4,0–4,6 barrido
+  entrar("hideki", 4.6); entrar("angel", 4.75);          // 4,6–9,6 Hideki y Angel (escalonado 0,15 s)
+  barrer(["hideki", "angel"], 9.6, 0.6);                 // 9,6–10,2 barrido
+  entrar("ida_luz", 10.2);                               // 10,2–14,2 Ida Luz
+  barrer(["ida_luz"], 14.2, 0.55);                       // 14,2–14,75 salida; verde limpio hasta 15,0
+  tl.set({}, {}, DURACION);
+  const aparece = { josue: 0.0, hideki: 4.6, angel: 4.75, ida_luz: 10.2 };
+  window.__setTime = (t) => {
+    tl.time(Math.max(0, Math.min(DURACION, t)));
+    let xb = -100;
+    for (const [id, el] of Object.entries(tarjetas)) {
+      const b = barridos.find((q) => q.salen.includes(id));
+      let visible = t >= aparece[id] && t < b.t0 + b.dur, corte = 0;
+      if (visible && t >= b.t0) { xb = xBarra(b, t); corte = Math.max(0, xb + 24 - el.offsetLeft); visible = corte < el.offsetWidth; }
+      el.style.visibility = visible ? "visible" : "hidden";
+      el.style.clipPath = corte > 0 ? `inset(0 0 0 ${corte}px)` : "none";
+    }
+    for (const b of barridos) if (t >= b.t0 && t < b.t0 + b.dur) xb = xBarra(b, t);
+    barra.style.left = `${xb}px`; fina.style.left = `${xb - 20}px`;
+    return true;
+  };
+  window.__equipo = { DURACION, letra, caja, ancho: ANCHO_T };
+  return true;
+}
+window.__listo = preparar();
+</script>
+</body>
+</html>
