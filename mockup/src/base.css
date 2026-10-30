@@ -289,3 +289,28 @@ body[data-pantalla="emergencia"] .barra-sup { background: var(--emergencia-bg); 
 .opciones-video.columna { flex-direction: column; }
 .boton.elegido { border-color: var(--primary); background: var(--tinte-primary); }
 
+/* ---------- marco de celular en escritorio (marco.js; ventana ≥ 600 px y sin ?marco=0) ---------- */
+/* Sin la clase con-marco (celular, iframes, pruebas) el envoltorio no existe o no ocupa lugar: la app queda igual. */
+html:not(.con-marco) .marco-escena, html:not(.con-marco) .marco, html:not(.con-marco) .marco-vidrio { display: contents; }
+html:not(.con-marco) .marco-isla, html:not(.con-marco) .marco-estado { display: none; }
+html.con-marco, html.con-marco body { overflow: hidden; }
+html.con-marco body[data-pantalla="emergencia"] { background-color: var(--bg); }
+.marco-escena { position: fixed; inset: 0; }
+/* centrado por posición (no por grilla): así sigue centrado aunque el marco sin escalar sea más alto que la ventana */
+.marco { --escala: 1; position: absolute; left: 50%; top: 50%; margin: -458px 0 0 -209px; width: 418px; height: 916px; padding: 14px; border-radius: 66px; background: #0d1117;
+  box-shadow: 0 0 0 2px #2a3342, 0 0 0 9px #0a0d13, 0 40px 90px rgba(0, 0, 0, 0.65); transform: scale(var(--escala)); }
+.marco-vidrio { position: relative; width: 390px; height: 888px; border-radius: 52px; overflow: hidden; isolation: isolate;
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px; }
+.marco-isla { position: absolute; top: 11px; left: 50%; width: 112px; height: 32px; margin-left: -56px; border-radius: 16px; background: #000; z-index: 40; }
+.marco-estado { position: absolute; top: 0; left: 0; right: 0; height: 44px; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 30px 0 34px; font: 600 15px/1 var(--fuente); color: var(--text); z-index: 39; }
+.marco-iconos { display: flex; align-items: center; gap: 6px; }
+.marco-barras { display: flex; align-items: flex-end; gap: 2px; height: 11px; }
+.marco-barras i { display: block; width: 3px; background: var(--text); border-radius: 1px; }
+.marco-bateria { width: 22px; height: 11px; border: 1.5px solid rgba(241, 245, 249, 0.7); border-radius: 3px; padding: 1.5px; }
+.marco-bateria i { display: block; height: 100%; width: 75%; background: var(--text); border-radius: 1px; }
+html.con-marco #app { position: absolute; top: 44px; left: 0; width: 390px; height: 844px; max-width: none; margin: 0; border: 0; }
+html.con-marco body[data-pantalla="emergencia"] #app { background: var(--emergencia-bg); }
+

@@ -6,6 +6,7 @@ import { escuchar, estado } from "./estado.js";
 import { iniciarFuente, irA, lanzarEscenario, tK002 } from "./data/fuente.js";
 import { gsap, transicionPantalla } from "./motion.js";
 import { ESCENARIO_VIDEO } from "./data/video.js";
+import { iniciarMarco } from "./marco.js";
 import { mostrarBanner } from "./components/hoja.js";
 import { abrirAclaraciones } from "./components/aclaraciones.js";
 import { ICONOS, el } from "./components/ui.js";
@@ -26,6 +27,7 @@ const PANTALLAS = Object.fromEntries(LISTA.map((p) => [p.id, p]));
 const PESTANAS = [["hoy", "Hoy"], ["gemelo", "Gemelo"], ["asistente", "AURA"], ["senal", "Señal"], ["dispositivo", "Dispositivo"]];
 const SIN_BARRA = new Set(["inicio", "emergencia"]);
 const params = new URLSearchParams(location.search);
+iniciarMarco();                                       // escritorio (≥ 600 px): la app dentro de un marco de celular
 
 const contenedor = document.getElementById("pantalla");
 const sello = document.getElementById("sello");
