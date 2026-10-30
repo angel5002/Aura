@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AURA · holograma</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05080f; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<!-- three r128 y sus módulos de ejemplo, copiados en local desde three@0.128.0 (sin CDN: abre sin internet) -->
+<script src="vendor/three.min.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script>
+"use strict";
+// Copia adaptada de analisis/escena_k002/index.html (escena K002) para el mockup. Cambios respecto del original:
+// lienzo del tamaño de la ventana (nitidez máx. 2x), sin HUD (los rótulos los pone la app), sin profundidad de
+// campo (costo en el celular), pausa cuando la pantalla no se ve, prefers-reduced-motion y dos modos:
+//   ?modo=senal   escena K002: señal y estado = DATOS REALES (k002_reproduccion.json); figura = PROTOCOLO.
+//   ?modo=instalacion  router y placa sobre el piso de baldosas, con la línea entre ambos en verde suave y giro
+//                 lento (tarjeta "Tu instalación" de Dispositivo; sin figura ni datos).
+//   ?modo=gemelo  solo la figura translúcida (cian tenue) con zonas de órganos dentro, que se encienden con suavidad
+//                 (lo decide la app); tocar una zona avisa a la app {tipo:"zona_tocada", zona}.
+// Mensajes de la app (postMessage): {tipo:"t", t} · {tipo:"pausa", valor} · {tipo:"zonas", zonas: {id: {color, nivel}}}
+//   · {tipo:"actividad", mov} · {tipo:"escanear"}
+//   ?modo=senal&escenario=caida_video  ESCENARIO SIMULADO del video de demostración (mockup/video/escenario.html): NO
+//                 carga K002 ni se mezcla con sus datos. La caminata, la señal y la caída son sintéticas (guion); la
+//                 caída usa el clip "Death" del mismo modelo CC0, más lento. El video fija el tiempo con
+//                 AURA_ESCENA.fijar(t) (cuadro a cuadro, determinista) y la app lee la señal con AURA_ESCENA.senal(t).
+//   ?modo=senal&escenario=bienestar_video  ESCENARIO SIMULADO de la noche (mismo video, otro guion): sala en penumbra,
+//                 cama hecha con primitivas, figura dormida de lado (pose fijada rotando huesos del mismo esqueleto) y
+//                 baldosas en azul tenue con 2 pulsos breves (AURA_ESCENA.noche.pulsos), cada uno con un movimiento leve
+//                 de la figura. Tampoco carga K002. Sin zonas: la cabeza no se colorea.
+// Modelo: "Animated Human" de Quaternius, CC0 (poly.pizza/m/c3Ibh9I3udk).
+const P = new URLSearchParams(location.search);
+const MODO = ["gemelo", "instalacion"].includes(P.get("modo")) ? P.get("modo") : "senal";
+const ESC = MODO === "senal" ? P.get("escenario") : null;
+const ESC_VIDEO = ESC === "caida_video", ESC_NOCHE = ESC === "bienestar_video";
+const FIJO = ESC_VIDEO || ESC_NOCHE;                  // escenarios del video: tiempo fijado por el video, sin K002
+const REDUCIDO = matchMedia("(prefers-reduced-motion: reduce)");
+let D = null;                                         // datos reales de K002 (solo modo señal)
+
+// ---------- reloj: la app manda el t de la reproducción; entre mensajes se interpola ----------
+let tRecibido = null, tRecibidoEn = 0, pausado = false, tFijo = null;   // tFijo: tiempo fijado por el video
+const tInicio = performance.now();
+function tActual() {
+  if (tFijo !== null) return tFijo;
+  if (tRecibido !== null) return tRecibido + (performance.now() - tRecibidoEn) / 1000;
+  return ((performance.now() - tInicio) / 1000) % 330;
+}
+addEventListener("message", (e) => {
+  if (e.origin !== location.origin) return;
+  const m = e.data || {};
+  if (m.tipo === "t") { tRecibido = m.t; tRecibidoEn = performance.now(); }
+  else if (m.tipo === "pausa") { const antes = pausado; pausado = !!m.valor; if (antes && !pausado) requestAnimationFrame(bucle); }   // un solo ciclo
+  else if (m.tipo === "zonas") ponerZonas(m.zonas || {});
+  else if (m.tipo === "actividad") haloObjetivo = m.mov ? 0.3 : 0.1;
+  else if (m.tipo === "escanear") escanear();
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !pausado) requestAnimationFrame(bucle); });
+
+function idx(t) {
+  let a = 0, b = D.t.length - 1;
+  if (t < D.t[0]) return 0;
+  while (a < b) { const m = (a + b + 1) >> 1; if (D.t[m] <= t) a = m; else b = m - 1; }
+  return a;
+}
+
+// ---------- protocolo (figura), igual que la escena original ----------
+const PUNTO1_Z = 0.80, VUELTA_Z = -0.20, PASO_X = 0.0;
+const SALIDA = -0.5, LLEGADA = 0.9, GIRO_FIN = 1.3, REGRESO = 2.5, GIRO = 0.4, PESO_MAX = 0.85;
+const rampa = (x) => Math.max(0, Math.min(1, x));
+function persona(t) {
+  for (const tc of (D ? D.cruces : [])) {
+    const s = t - tc;
+    if (s >= SALIDA && s < LLEGADA)
+      return { z: PUNTO1_Z + (s - SALIDA) / (LLEGADA - SALIDA) * (VUELTA_Z - PUNTO1_Z), camina: s - SALIDA, rumbo: Math.PI,
+               w: PESO_MAX * rampa(Math.min((s - SALIDA) / 0.25, (LLEGADA - s) / 0.2 + 0.3)) };
+    if (s >= LLEGADA && s < GIRO_FIN)
+      return { z: VUELTA_Z, camina: s - SALIDA, rumbo: Math.PI * (1 - (s - LLEGADA) / (GIRO_FIN - LLEGADA)),
+               w: 0.3 * rampa(1 - (s - LLEGADA) / 0.15) };
+    if (s >= GIRO_FIN && s < REGRESO)
+      return { z: VUELTA_Z + (s - GIRO_FIN) / (REGRESO - GIRO_FIN) * (PUNTO1_Z - VUELTA_Z), camina: s - SALIDA, rumbo: 0,
+               w: PESO_MAX * rampa(Math.min((s - GIRO_FIN) / 0.2 + 0.3, (REGRESO - s) / 0.2 + 0.3)) };
+    if (s >= REGRESO && s < REGRESO + GIRO)
+      return { z: PUNTO1_Z, camina: null, rumbo: Math.PI * (s - REGRESO) / GIRO, w: 0 };
+  }
+  return { z: PUNTO1_Z, camina: null, rumbo: Math.PI, w: 0 };
+}
+
+// ---------- escenario simulado "caida_video" (guion del video; nada de esto viene del WiFi ni de K002) ----------
+// 2,0–6,8 s entra caminando por la derecha, de costado a la cámara; entra en la zona de baldosas a los ~4,8 s;
+// 6,8 s cae (clip "Death": de rodillas y luego tendida, ~2,2 s); después, quietud.
+const CV = { ini: 2.0, fin: 6.8, rampa: 0.45, A: [2.2, 0.2], B: [0.35, -0.1], caida: 6.8, ritmoCaida: 1.1 };
+const ZONA = { x: 1.1, z: 0.4 };                       // borde de las baldosas del enlace (|x| ≤ 1,1 m, |z| ≤ 0,4 m)
+const CV_LARGO = Math.hypot(CV.B[0] - CV.A[0], CV.B[1] - CV.A[1]);
+const suaveEntre = (a, b, x) => { const q = rampa((x - a) / (b - a)); return q * q * (3 - 2 * q); };
+// avance 0..1 con arranque y frenado suaves (rampas de 0,45 s; velocidad constante en medio)
+function avanceCV(t) {
+  const T = CV.fin - CV.ini, r = CV.rampa, v = 1 / (T - r), s = Math.max(0, Math.min(T, t - CV.ini));
+  if (s < r) return { u: v * s * s / (2 * r), vel: v * s / r };
+  if (s > T - r) { const q = T - s; return { u: 1 - v * q * q / (2 * r), vel: v * q / r }; }
+  return { u: v * (s - r / 2), vel: v };
+}
+function personaVideo(t) {
+  const { u, vel } = avanceCV(t), velM = vel * CV_LARGO;      // m/s
+  const x = CV.A[0] + (CV.B[0] - CV.A[0]) * u, z = CV.A[1] + (CV.B[1] - CV.A[1]) * u;
+  const cae = suaveEntre(CV.caida - 0.05, CV.caida + 0.25, t);
+  return { x, z, vel: velM, rumbo: Math.atan2(CV.B[0] - CV.A[0], CV.B[1] - CV.A[1]),
+           camina: u * CV_LARGO * (RITMO / 0.7), w: PESO_MAX * Math.min(1, velM / 0.2), cae,
+           tCaida: Math.max(0, t - CV.caida) * CV.ritmoCaida };
+}
+// Señal sintética (misma escala que el detector: entrada = 1): caminando fuera de la zona de baldosas queda bajo el
+// umbral (azul); al entrar en la zona sube sobre el umbral (rojo); golpe fuerte en la caída y luego quietud.
+// Ruido determinista (sumas de senos) para que cada cuadro sea reproducible.
+function senalVideo(t) {
+  const p = personaVideo(t);
+  const borde = Math.max(Math.abs(p.x) - ZONA.x, Math.abs(p.z) - ZONA.z);   // m respecto del borde (negativo = dentro)
+  const dentro = suaveEntre(0, 0.1, -borde);            // sube solo ya dentro de la zona (0 en el borde y fuera)
+  const ruido = 0.05 * (Math.sin(t * 7.3) + 0.6 * Math.sin(t * 12.9 + 1) + 0.4 * Math.sin(t * 3.1 + 2));
+  const paso = Math.min(1, 0.55 + p.vel / 0.6);
+  const camina = p.vel > 0.02 ? paso * (0.35 + 1.4 * dentro) : 0;   // fuera: ≤ 0,67 (bajo el umbral)
+  const golpe = 2.4 * suaveEntre(6.5, 7.0, t) * (1 - suaveEntre(8.3, 9.1, t));
+  const suave = Math.max(0.05, 0.22 + ruido + camina + golpe);
+  return { t, suave, entrada: 1, mov: suave > 1, rojo: suaveEntre(0.9, 1.1, suave), intenso: rampa((suave - 1.6) / 1.0) };
+}
+
+// ---------- escenario simulado "bienestar_video": la noche (guion del video, nada viene del WiFi ni de K002) ----------
+const CAMA = { x: 0.1, z: -0.8, largo: 2.0, ancho: 0.95, alto: 0.44 };   // alto = cara superior del colchón
+CAMA.xAlmohada = CAMA.x - CAMA.largo / 2 + 0.28;
+const PULSOS = [3.4, 5.4];                            // 2 momentos breves de movimiento durante la noche (s del video)
+const pulsoNoche = (t) => Math.max(...PULSOS.map((c) => Math.exp(-(((t - c) / 0.25) ** 2))));
+// Pose dormida DE LADO, mirando a la cámara (el modelo no la trae): se parte de la pose de reposo del clip "Idle"
+// (t = 0, fija) y se rotan huesos del mismo esqueleto: [x, y, z] en grados, en el eje local de cada hueso.
+// Rodillas un poco flexionadas, brazos recogidos delante del pecho, cabeza apenas inclinada. Sin respiración.
+const POSE_DORMIR = {
+  Spine: [12, 0, 0], Spine1: [8, 0, 0], Neck: [12, 0, 0], Head: [6, 0, 0],
+  LeftUpLeg: [34, 0, 0], RightUpLeg: [26, 0, 0], LeftLeg: [-44, 0, 0], RightLeg: [-36, 0, 0],   // cadera +X, rodilla −X
+  LeftArm: [0, 0, 52], RightArm: [0, 0, -52], LeftForeArm: [0, 0, 86], RightForeArm: [0, 0, -86],   // izquierdo +Z, derecho −Z
+};
+// Dos movimientos leves, uno por pulso, con transición suave de 0,6 s; después la pose queda como quedó
+const MOVIMIENTOS = [
+  { c: PULSOS[0], huesos: { LeftUpLeg: [12, 0, 0], LeftLeg: [-14, 0, 0], RightLeg: [-6, 0, 0] } },   // acomoda las piernas
+  { c: PULSOS[1], huesos: { LeftArm: [0, 0, 22], LeftForeArm: [0, 0, -34] } },                     // acomoda el brazo
+];
+const ACOSTADA = { rotX: -0.3, rotZ: Math.PI / 2 };   // de lado (cabeza hacia la cabecera, -x), girada hacia la cámara alta
+let huesosFig = null, reposo = null, posCama = null, giroCama = null;
+const qTmp = new THREE.Quaternion(), eTmp = new THREE.Euler();
+// El mezclador solo reescribe un hueso si su valor cambia: la pose de reposo se toma UNA vez y cada cuadro parte de
+// ella (si no, las rotaciones se acumularían). En la noche no se vuelve a llamar al mezclador.
+function tomarReposo() {
+  accCaminar.setEffectiveWeight(0); accCaida.setEffectiveWeight(0); accQuieto.setEffectiveWeight(1);
+  accQuieto.time = 0; mezclador.update(0);
+  huesosFig = {}; reposo = {};
+  figura.traverse((o) => { if (o.isBone) { huesosFig[o.name] = o; reposo[o.name] = o.quaternion.clone(); } });
+}
+function posarDormida(t) {
+  if (!reposo) tomarReposo();
+  const pesos = MOVIMIENTOS.map((m) => suaveEntre(m.c - 0.3, m.c + 0.3, t));
+  for (const [n, base] of Object.entries(POSE_DORMIR)) {
+    const e = base.slice();
+    MOVIMIENTOS.forEach((m, k) => { const d = m.huesos[n]; if (d) for (let i = 0; i < 3; i++) e[i] += d[i] * pesos[k]; });
+    huesosFig[n].quaternion.copy(reposo[n]).multiply(qTmp.setFromEuler(eTmp.set(...e.map((g) => THREE.MathUtils.degToRad(g)))));
+  }
+}
+// La cabeza sobre la almohada, junto a la cabecera; el cuerpo apoyado sobre el colchón (se calcula una vez)
+function colocarEnCama() {
+  posarDormida(0);
+  const v = (n) => huesosFig[n].getWorldPosition(new THREE.Vector3());
+  figura.position.set(0, 0, 0); figura.rotation.set(ACOSTADA.rotX, 0, ACOSTADA.rotZ); figura.updateMatrixWorld(true);
+  // el reposo de "Idle" viene algo girado: se alinea caderas → cabeza con el largo de la cama (-x)
+  const dir = v("Head").sub(v("Hips"));
+  const giro = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2 - Math.atan2(dir.x, dir.z));
+  giroCama = giro.multiply(figura.quaternion.clone());
+  figura.quaternion.copy(giroCama); figura.updateMatrixWorld(true);
+  const cabeza = v("Head"), bajo = Math.min(...["Hips", "Spine1", "RightShoulder", "RightUpLeg", "RightLeg", "RightFoot", "LeftShoulder", "LeftUpLeg"].map((n) => v(n).y));
+  posCama = new THREE.Vector3(CAMA.xAlmohada - cabeza.x, CAMA.alto + 0.06 - bajo, CAMA.z - cabeza.z);
+  figura.position.copy(posCama);
+}
+
+// ---------- escena ----------
+const gl = document.getElementById("gl");
+const renderer = new THREE.WebGLRenderer({ canvas: gl, antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: FIJO });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.setClearColor(0x05080f, 1);
+const escena = new THREE.Scene();
+const camara = new THREE.PerspectiveCamera(36, 1, 0.1, 40);
+const cielo = new THREE.HemisphereLight(0x6f8cff, 0x05080f, ESC_NOCHE ? 0.22 : 0.6); escena.add(cielo);   // noche: penumbra
+const luz = new THREE.DirectionalLight(ESC_NOCHE ? 0x8aa0ff : 0xffffff, ESC_NOCHE ? 0.16 : 0.5); luz.position.set(2, 4, 3); escena.add(luz);
+
+const VISTA = {
+  senal: { dist: 5.6, incl: 40, az: -16, mira: new THREE.Vector3(0, 0.55, 0.0), hfov: 48 },
+  gemelo: { dist: 3.62, incl: 7, az: 0, mira: new THREE.Vector3(0, 0.84, 0), vfov: 30 },   // iteración 4: figura ~90 % del alto
+  instalacion: { dist: 3.1, incl: 24, az: 0, mira: new THREE.Vector3(0, 0.6, 0), hfov: 56 },
+}[MODO];
+// escenario del video: más cerca, para que la caminata y la caída se lean en la tarjeta del celular
+if (ESC_VIDEO) Object.assign(VISTA, { dist: 4.3, incl: 30, az: -14, mira: new THREE.Vector3(0.35, 0.45, -0.05), hfov: 52 });
+if (ESC_NOCHE) Object.assign(VISTA, { dist: 3.7, incl: 52, az: -20, mira: new THREE.Vector3(0.05, 0.25, -0.4), hfov: 56 });
+function ponerCamara(azGrados) {
+  const a = THREE.MathUtils.degToRad(azGrados), e = THREE.MathUtils.degToRad(VISTA.incl);
+  camara.position.set(VISTA.mira.x + VISTA.dist * Math.cos(e) * Math.sin(a), VISTA.mira.y + VISTA.dist * Math.sin(e),
+                      VISTA.mira.z + VISTA.dist * Math.cos(e) * Math.cos(a));
+  camara.lookAt(VISTA.mira);
+}
+
+// Material Fresnel de la figura (original): borde más brillante que el centro, sin esqueleto a la vista.
+// Iteración 4: en el gemelo, borde mucho más intenso y relleno más visible, con una banda de escaneo (escY);
+// en señal, el borde se tiñe de rojo durante el movimiento (uniform "borde").
+const COLOR_FIG = new THREE.Color(MODO === "gemelo" ? 0x5cc8d6 : 0x3dffc0);
+const FRESNEL = MODO === "gemelo"
+  ? { opacidad: 0.85, exp: 1.8, relleno: 0.42, brillo: 2.8, alfaRelleno: 0.2, alfaBorde: 1.0 }
+  : ESC_VIDEO ? { opacidad: 0.9, exp: 1.9, relleno: 0.45, brillo: 2.6, alfaRelleno: 0.2, alfaBorde: 1.0 }   // figura bien visible
+  : ESC_NOCHE ? { opacidad: 0.8, exp: 2.0, relleno: 0.3, brillo: 1.9, alfaRelleno: 0.14, alfaBorde: 0.9 }   // penumbra
+  : { opacidad: 0.6, exp: 2.4, relleno: 0.22, brillo: 1.4, alfaRelleno: 0.05, alfaBorde: 0.7 };
+const matHolo = new THREE.ShaderMaterial({
+  skinning: true, transparent: true, depthWrite: false, side: THREE.FrontSide,
+  uniforms: { color: { value: COLOR_FIG.clone() }, borde: { value: COLOR_FIG.clone() }, opacidad: { value: FRESNEL.opacidad },
+    exponente: { value: FRESNEL.exp }, relleno: { value: FRESNEL.relleno }, brillo: { value: FRESNEL.brillo },
+    alfaRelleno: { value: FRESNEL.alfaRelleno }, alfaBorde: { value: FRESNEL.alfaBorde }, escY: { value: 0 }, escOn: { value: 0 }, suelo: { value: 0 } },
+  vertexShader: `
+    #include <common>
+    #include <skinning_pars_vertex>
+    attribute float aCabeza;
+    varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
+    void main() {
+      vCab = aCabeza;
+      #include <skinbase_vertex>
+      #include <beginnormal_vertex>
+      #include <skinnormal_vertex>
+      #include <defaultnormal_vertex>
+      #include <begin_vertex>
+      #include <skinning_vertex>
+      #include <project_vertex>
+      vN = normalize(transformedNormal); vV = normalize(-mvPosition.xyz);
+      vY = (modelMatrix * vec4(transformed, 1.0)).y;
+    }`,
+  fragmentShader: `
+    uniform vec3 color; uniform vec3 borde; uniform float opacidad, exponente, relleno, brillo, alfaRelleno, alfaBorde, escY, escOn, suelo;
+    varying vec3 vN; varying vec3 vV; varying float vY; varying float vCab;
+    void main() {
+      if (vCab > 0.5) discard;
+      float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), exponente);
+      float pies = mix(smoothstep(0.02, 0.3, vY), 1.0, suelo);   // suelo = 1: figura tendida (no se apaga)
+      float banda = escOn * exp(-pow((vY - escY) / 0.03, 2.0));
+      vec3 c = mix(color, borde, smoothstep(0.15, 0.7, f)) * (relleno + brillo * f) * (0.35 + 0.65 * pies) + borde * 2.2 * banda;
+      gl_FragColor = vec4(c, min(1.0, opacidad * (alfaRelleno + alfaBorde * f) * (0.4 + 0.6 * pies) + 0.7 * banda));
+    }`,
+});
+const figura = new THREE.Group();
+escena.add(figura);
+let mezclador = null, accCaminar = null, accQuieto = null, accCaida = null;
+const RITMO = 1.25;
+
+function texturaRadial(stops, w = 64, h = 64) {
+  const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+  const x = cv.getContext("2d"); x.translate(w / 2, h / 2); x.scale(1, h / w);
+  const g = x.createRadialGradient(0, 0, 0, 0, 0, w / 2);
+  stops.forEach(([p, c]) => g.addColorStop(p, c));
+  x.fillStyle = g; x.fillRect(-w / 2, -w / 2, w, w);
+  return new THREE.CanvasTexture(cv);
+}
+const texHalo = texturaRadial([[0, "rgba(255,255,255,0.9)"], [0.5, "rgba(255,255,255,0.3)"], [1, "rgba(255,255,255,0)"]], 64, 128);
+const texPunto = texturaRadial([[0, "rgba(255,255,255,1)"], [0.4, "rgba(255,255,255,0.35)"], [1, "rgba(255,255,255,0)"]]);
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: MODO === "gemelo" ? 0x5cc8d6 : 0x2fffc8, transparent: true, opacity: MODO === "gemelo" ? 0.1 : 0.16, depthWrite: false }));
+let haloObjetivo = 0.1;                                // gemelo: el halo (actividad) responde al movimiento real
+halo.scale.set(1.0, 1.9, 1); halo.position.y = 1.1;
+figura.add(halo);
+
+// Partículas suaves alrededor de la figura (reproducibles)
+const NP = 160, semillas = [];
+const geoPart = new THREE.BufferGeometry();
+geoPart.setAttribute("position", new THREE.BufferAttribute(new Float32Array(NP * 3), 3));
+let sem = 7; const azar = () => (sem = (sem * 16807) % 2147483647) / 2147483647;
+for (let i = 0; i < NP; i++) semillas.push({ a: azar() * Math.PI * 2, r: 0.22 + azar() * 0.3, y: azar(), v: 0.08 + azar() * 0.12, f: azar() });
+const particulas = new THREE.Points(geoPart, new THREE.PointsMaterial({
+  color: MODO === "gemelo" ? 0x8fd8e2 : 0x7dffd8, size: 0.035, map: texPunto, transparent: true, opacity: MODO === "gemelo" ? 0.3 : 0.5, depthWrite: false }));
+figura.add(particulas);
+function moverParticulas(t) {
+  const pos = geoPart.attributes.position.array;
+  semillas.forEach((s, i) => {
+    const h = (s.y + t * s.v) % 1, a = s.a + t * 0.25 * (s.f - 0.5);
+    pos[i * 3] = Math.cos(a) * s.r; pos[i * 3 + 1] = 0.35 + h * 1.5; pos[i * 3 + 2] = Math.sin(a) * s.r;
+  });
+  geoPart.attributes.position.needsUpdate = true;
+}
+
+// ---------- modo señal: sala de K002 (igual que el original) ----------
+let baldosas = null, enLinea = [], haz = null, cupulas = [], estela = [], tubo = null, ondasRojas = [], rojo = 0;   // rojo: 0 quieto · 1 movimiento (suavizado)
+const HUAWEI = new THREE.Vector3(-1, 1, 0), PLACA = new THREE.Vector3(1, 1, 0);
+function equipo(pos, color, tam, conPie = true) {
+  const g = new THREE.Group();
+  const caja = new THREE.Mesh(new THREE.BoxGeometry(...tam), new THREE.MeshStandardMaterial({ color: 0x141922, emissive: color, emissiveIntensity: 0.12 }));
+  const bordes = new THREE.LineSegments(new THREE.EdgesGeometry(caja.geometry), new THREE.LineBasicMaterial({ color }));
+  const pie = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, pos.y - tam[1] / 2, 8), new THREE.MeshBasicMaterial({ color: 0x23324a }));
+  pie.position.set(0, -pos.y / 2, 0);
+  g.add(caja, bordes); if (conPie) g.add(pie); g.position.copy(pos); escena.add(g);
+}
+function piso(nx, nz, dz, color) {
+  const LADO = 0.2, tmp = new THREE.Object3D();
+  const m = new THREE.InstancedMesh(new THREE.BoxGeometry(LADO * 0.82, 0.01, LADO * 0.82), new THREE.MeshBasicMaterial({ color: 0xffffff }), nx * nz);
+  let n = 0;
+  for (let i = 0; i < nx; i++) for (let k = 0; k < nz; k++) {
+    const x = (i - (nx - 1) / 2) * LADO, z = (k - (nz - 1) / 2) * LADO + dz;
+    tmp.position.set(x, 0, z); tmp.updateMatrix(); m.setMatrixAt(n, tmp.matrix);
+    enLinea.push(Math.abs(z) <= 0.3 && x >= -1.0 && x <= 1.0);
+    m.setColorAt(n, new THREE.Color(color)); n++;
+  }
+  escena.add(m);
+  return m;
+}
+if (MODO === "instalacion") {
+  escena.fog = new THREE.FogExp2(0x05080f, 0.11);
+  baldosas = piso(22, 16, 0, 0x0b1a16);
+  for (let k = 0; k < enLinea.length; k++) if (enLinea[k]) baldosas.setColorAt(k, new THREE.Color(0x0f2a20));
+  equipo(HUAWEI, 0x4f7dff, [0.22, 0.16, 0.16]);
+  equipo(PLACA, 0x2fe08a, [0.10, 0.04, 0.06]);
+  escena.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([HUAWEI, PLACA]),
+    new THREE.LineBasicMaterial({ color: 0x6fcf97, transparent: true, opacity: 0.7 })));
+  figura.visible = false;
+}
+if (MODO === "senal") {
+  escena.fog = new THREE.FogExp2(0x05080f, 0.075);
+  baldosas = piso(40, 34, -0.6, 0x0b1a16);
+  equipo(HUAWEI, 0x4f7dff, [0.22, 0.16, 0.16]);
+  equipo(PLACA, 0x2fe08a, [0.10, 0.04, 0.06]);
+  if (!ESC_NOCHE) {
+    equipo(new THREE.Vector3(0.45, 1.0, -1.15), 0xd9a441, [0.08, 0.012, 0.16], false);
+    const cama = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 1.1), new THREE.MeshStandardMaterial({ color: 0x10151f }));
+    cama.position.set(0.3, 0.25, -1.75); escena.add(cama);
+    escena.add(new THREE.LineSegments(new THREE.EdgesGeometry(cama.geometry), new THREE.LineBasicMaterial({ color: 0x2a3550 })).translateX(0.3).translateY(0.25).translateZ(-1.75));
+  }
+  haz = new THREE.Line(new THREE.BufferGeometry().setFromPoints([HUAWEI, PLACA]),
+                       new THREE.LineDashedMaterial({ color: 0x6fa8ff, dashSize: 0.06, gapSize: 0.04, transparent: true, opacity: 0.6 }));
+  haz.computeLineDistances(); escena.add(haz);
+  // Iteración 4 (solo en MOVIMIENTO): la línea se vuelve un tubo rojo más grueso y de ella salen ondas rojas
+  tubo = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 2, 10, 1, true),
+                        new THREE.MeshBasicMaterial({ color: 0xff4a3d, transparent: true, opacity: 0, depthWrite: false }));
+  tubo.rotation.z = Math.PI / 2; tubo.position.set(0, 1, 0); escena.add(tubo);
+  // Onda: anillos finos perpendiculares a la línea, repartidos a lo largo de ella, que crecen y se desvanecen (2 frentes)
+  const geoAro = new THREE.TorusGeometry(1, 0.018, 6, 48);
+  for (let k = 0; k < 2; k++) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff4a3d, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const frente = new THREE.Group();
+    for (let j = 0; j < 7; j++) { const a = new THREE.Mesh(geoAro, mat); a.rotation.y = Math.PI / 2; a.position.x = -0.78 + j * 0.26; frente.add(a); }
+    frente.position.set(0, 1, 0); frente.userData.mat = mat; escena.add(frente); ondasRojas.push(frente);
+  }
+  const geoCupula = new THREE.SphereGeometry(1, 28, 9, 0, Math.PI * 2, 0, Math.PI / 2);
+  for (let i = 0; i < 3; i++) {
+    const m = new THREE.Mesh(geoCupula, new THREE.MeshBasicMaterial({ color: 0x5a86ff, wireframe: true, transparent: true, opacity: 0.5, fog: false }));
+    m.position.copy(HUAWEI); m.position.y = 0.0; escena.add(m); cupulas.push(m);
+  }
+  for (let k = 1; k <= 5; k++) {
+    const e = new THREE.Sprite(new THREE.SpriteMaterial({ map: texHalo, color: 0x2fffc8, transparent: true, opacity: 0, depthWrite: false }));
+    e.scale.set(0.6, 1.7, 1); e.position.y = 1.0; escena.add(e); estela.push(e);
+  }
+  const matMarca = new THREE.MeshBasicMaterial({ color: 0xaab6cc, transparent: true, opacity: 0.5, depthWrite: false });
+  const plano = (w, h, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matMarca); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.008, z); escena.add(m); };
+  if (!ESC_NOCHE) {
+    const anillo = new THREE.Mesh(new THREE.RingGeometry(0.17, 0.195, 40), matMarca);
+    anillo.rotation.x = -Math.PI / 2; anillo.position.set(PASO_X, 0.008, PUNTO1_Z); escena.add(anillo);
+    plano(0.5, 0.025, PASO_X, PUNTO1_Z); plano(0.025, 0.5, PASO_X, PUNTO1_Z);
+    plano(0.6, 0.03, PASO_X, VUELTA_Z); plano(0.03, 0.14, PASO_X - 0.3, VUELTA_Z); plano(0.03, 0.14, PASO_X + 0.3, VUELTA_Z);
+  } else {
+    escena.fog.density = 0.1;
+    // Cama simple con primitivas (sin modelos nuevos): base, colchón, cabecera, almohada y frazada sobre los pies.
+    // La cabecera queda hacia -x; el enlace pasa por delante, sobre las baldosas.
+    const caja = (w, h, d, x, y, z, color, borde) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color, emissive: 0x0a1830, emissiveIntensity: 0.25 }));
+      m.position.set(x, y, z); escena.add(m);
+      if (borde) { const l = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: borde, transparent: true, opacity: 0.55 })); l.position.copy(m.position); escena.add(l); }
+      return m;
+    };
+    const { x, z, largo, ancho } = CAMA;
+    caja(largo, 0.28, ancho, x, 0.14, z, 0x0d1320, 0x2a3a5a);
+    caja(largo - 0.08, 0.16, ancho - 0.06, x, 0.36, z, 0x141c2b, 0x324466);
+    caja(0.06, 0.78, ancho, x - largo / 2 - 0.03, 0.39, z, 0x0f1726, 0x2a3a5a);
+    const almohada = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshStandardMaterial({ color: 0x1c2638, emissive: 0x0a1830, emissiveIntensity: 0.3 }));
+    almohada.scale.set(0.2, 0.06, 0.34); almohada.position.set(CAMA.xAlmohada, CAMA.alto + 0.03, z); escena.add(almohada);
+    // frazada hasta el hombro: media bóveda translúcida sobre el cuerpo (se ven debajo los dos movimientos leves)
+    const desde = CAMA.xAlmohada + 0.24, largoFrazada = x + largo / 2 - desde;
+    const frazada = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, largoFrazada, 28, 1, false, Math.PI, Math.PI),
+      new THREE.MeshStandardMaterial({ color: 0x1a2742, emissive: 0x0c1c38, emissiveIntensity: 0.45, transparent: true, opacity: 0.55,
+        depthWrite: false, side: THREE.DoubleSide }));
+    frazada.rotation.z = -Math.PI / 2; frazada.scale.set(0.27, 1, ancho / 2 + 0.02);
+    frazada.position.set(desde + largoFrazada / 2, CAMA.alto, z); frazada.renderOrder = 3; escena.add(frazada);
+    const bordeFrazada = new THREE.LineSegments(new THREE.EdgesGeometry(frazada.geometry, 30), new THREE.LineBasicMaterial({ color: 0x4a64a0, transparent: true, opacity: 0.6 }));
+    bordeFrazada.rotation.copy(frazada.rotation); bordeFrazada.scale.copy(frazada.scale); bordeFrazada.position.copy(frazada.position); escena.add(bordeFrazada);
+  }
+}
+
+// ---------- modo gemelo: zonas de órganos dentro del holograma, piso y línea de escaneo ----------
+// [x, y, z, ancho, alto] de cada mancha (figura de 1,70 m que mira a la cámara, +z). Apagadas = gris tenue.
+const ORGANOS = {
+  cabeza: [[0, 1.57, 0.06, 0.16, 0.13]],
+  pulmones: [[-0.065, 1.2, 0.07, 0.11, 0.2], [0.065, 1.2, 0.07, 0.11, 0.2]],
+  corazon: [[0.035, 1.17, 0.11, 0.07, 0.07]],
+  caidas: [[0, 0.92, 0.04, 0.3, 0.11], [-0.09, 0.5, 0.06, 0.09, 0.09], [0.09, 0.5, 0.06, 0.09, 0.09]],
+};
+const APAGADA = { color: new THREE.Color(0x7c8ba1), op: 0.07 }, ENCENDIDA = 0.75;
+const zonas = {};
+let linea = null, escaneoInicio = performance.now();
+const ESCANEO = { ciclo: 6, barrido: 3.2 };            // iteración 4: una pasada lenta (3,2 s) cada 6 s
+if (MODO === "gemelo") {
+  for (const [id, manchas] of Object.entries(ORGANOS)) {
+    zonas[id] = { sprites: [], color: APAGADA.color.clone(), objetivo: APAGADA.op, op: APAGADA.op, late: false };
+    for (const [x, y, z, w, h] of manchas) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: texPunto, color: APAGADA.color, transparent: true, opacity: APAGADA.op,
+        depthWrite: false, depthTest: false }));
+      sp.scale.set(w * 1.6, h * 1.6, 1); sp.position.set(x, y, z); sp.renderOrder = 2; sp.userData.escala = [w * 1.6, h * 1.6];
+      figura.add(sp); zonas[id].sprites.push(sp);
+    }
+  }
+  // Aro del piso más luminoso (iteración 4): aro nítido, aro exterior tenue y un resplandor plano
+  const plano = (geo, color, op, y, extra = {}) => {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false, ...extra }));
+    m.rotation.x = -Math.PI / 2; m.position.y = y; escena.add(m); return m;
+  };
+  plano(new THREE.PlaneGeometry(1.5, 1.5), 0x5cc8d6, 0.4, 0.003, { map: texPunto, blending: THREE.AdditiveBlending });
+  plano(new THREE.RingGeometry(0.4, 0.445, 72), 0x9eeaf2, 0.9, 0.005);
+  plano(new THREE.RingGeometry(0.53, 0.54, 72), 0x5cc8d6, 0.35, 0.005);
+  linea = new THREE.Mesh(new THREE.RingGeometry(0.0, 0.36, 48), new THREE.MeshBasicMaterial({ color: 0x9eeaf2, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  linea.rotation.x = -Math.PI / 2; escena.add(linea);
+  // Tocar una zona: se proyecta cada mancha a la pantalla y gana la más cercana (radio de 40 px)
+  const zonaEn = (cx, cy) => {
+    const r = gl.getBoundingClientRect(), v = new THREE.Vector3();
+    let mejor = null, dmin = 40;
+    for (const [id, z] of Object.entries(zonas)) for (const sp of z.sprites) {
+      sp.getWorldPosition(v).project(camara);
+      const d = Math.hypot((v.x + 1) / 2 * r.width - (cx - r.left), (1 - v.y) / 2 * r.height - (cy - r.top));
+      if (d < dmin) { dmin = d; mejor = id; }
+    }
+    return mejor;
+  };
+  gl.addEventListener("click", (e) => { const id = zonaEn(e.clientX, e.clientY); if (id) parent.postMessage({ tipo: "zona_tocada", zona: id }, location.origin); });
+  gl.addEventListener("pointermove", (e) => { gl.style.cursor = zonaEn(e.clientX, e.clientY) ? "pointer" : "default"; });
+}
+// La app manda {id: {color, nivel, late}}; nivel 0 = apagada ("sin medición"), 1 = encendida. Se llega con suavidad.
+// late (iteración 4, escenario "Ejemplo"): la zona late con fuerza (brillo y tamaño, ciclo de 1,5 s).
+function ponerZonas(estados) {
+  for (const [id, z] of Object.entries(zonas)) {
+    const e = estados[id];
+    if (e && e.nivel > 0) { z.color.set(e.color); z.objetivo = APAGADA.op + (ENCENDIDA - APAGADA.op) * Math.min(1, e.nivel); z.late = !!e.late; }
+    else { z.color.copy(APAGADA.color); z.objetivo = APAGADA.op; z.late = false; }
+  }
+}
+function suavizarZonas(t) {
+  const reducido = REDUCIDO.matches, k = reducido ? 1 : 0.05;
+  const pulso = reducido ? 0.6 : 0.5 + 0.5 * Math.sin(t * 2 * Math.PI / 1.5);
+  for (const z of Object.values(zonas)) {
+    z.op += (z.objetivo - z.op) * k;
+    const encendida = (z.op - APAGADA.op) / (ENCENDIDA - APAGADA.op);           // 0..1 (suave al encender)
+    const late = z.late ? Math.max(0, encendida) : 0;
+    for (const sp of z.sprites) {
+      sp.material.color.lerp(z.color, k);
+      sp.material.opacity = Math.min(1, z.op * (1 + late * (0.55 * pulso - 0.1)));
+      const e = 1 + late * (0.12 + 0.3 * pulso);
+      sp.scale.set(sp.userData.escala[0] * e, sp.userData.escala[1] * e, 1);
+    }
+  }
+  halo.material.opacity += (haloObjetivo - halo.material.opacity) * (REDUCIDO.matches ? 1 : 0.04);
+}
+function escanear() { escaneoInicio = performance.now(); }   // empieza una pasada ya (y sigue el ciclo de 6 s)
+
+const cargaFigura = MODO === "instalacion" ? Promise.resolve() : new Promise((ok, mal) => {
+  new THREE.GLTFLoader().load("modelos/quaternius_animated_human.glb", (g) => {
+    const modelo = g.scene;
+    modelo.traverse((o) => { if (o.isMesh) { o.material = matHolo; o.frustumCulled = false; } });
+    modelo.updateMatrixWorld(true);
+    const caja = new THREE.Box3().setFromObject(modelo), tam = caja.getSize(new THREE.Vector3());
+    modelo.scale.multiplyScalar(1.70 / tam.y);
+    modelo.position.y = -caja.min.y * 1.70 / tam.y;
+    figura.add(modelo);
+    modelo.updateMatrixWorld(true);
+    let malla = null; modelo.traverse((o) => { if (o.isSkinnedMesh) malla = o; });
+    const huesos = malla.skeleton.bones, cabeza = huesos.find((b) => b.name === "Head");
+    const deCabeza = new Set(); cabeza.traverse((b) => deCabeza.add(huesos.indexOf(b)));
+    const geo = malla.geometry, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+    const aCab = new Float32Array(si.count), caja3 = new THREE.Box3(), v = new THREE.Vector3();
+    for (let i = 0; i < si.count; i++) {
+      let p = 0;
+      for (const c of ["getX", "getY", "getZ", "getW"]) if (deCabeza.has(si[c](i))) p += sw[c](i);
+      aCab[i] = p;
+      if (p > 0.5) { v.fromBufferAttribute(geo.attributes.position, i); malla.boneTransform(i, v); caja3.expandByPoint(v.applyMatrix4(malla.matrixWorld)); }
+    }
+    geo.setAttribute("aCabeza", new THREE.BufferAttribute(aCab, 1));
+    const centro = caja3.getCenter(new THREE.Vector3()), tamCab = caja3.getSize(new THREE.Vector3());
+    const escCab = cabeza.getWorldScale(new THREE.Vector3()).x;
+    const matCab = matHolo.clone(); matCab.skinning = false; matCab.uniforms = matHolo.uniforms;
+    const bola = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 24), matCab);
+    const d = Math.min(tamCab.x, tamCab.z) * 0.95;
+    bola.scale.set(d / escCab, d * 1.18 / escCab, d / escCab);
+    bola.position.copy(cabeza.worldToLocal(centro.clone().add(new THREE.Vector3(0, -0.02, 0))));
+    cabeza.add(bola);
+    mezclador = new THREE.AnimationMixer(modelo);
+    const clip = (nombre) => g.animations.find((a) => a.name.endsWith("|" + nombre));
+    accCaminar = mezclador.clipAction(clip("Walk")); accQuieto = mezclador.clipAction(clip("Idle"));
+    accCaminar.play(); accQuieto.play();
+    if (FIJO) { accCaida = mezclador.clipAction(clip("Death")); accCaida.play(); accCaida.setEffectiveWeight(0); }
+    if (ESC_NOCHE) colocarEnCama();
+    ok();
+  }, undefined, mal);
+});
+
+// ---------- posprocesado: bloom (a media resolución) y viñeta ----------
+const compositor = new THREE.EffectComposer(renderer);
+compositor.addPass(new THREE.RenderPass(escena, camara));
+// brillo difuso y de baja intensidad (iteración 2)
+const BLOOM = { senal: 0.6, gemelo: 0.75, instalacion: 0.45 }[MODO], BLOOM_MOV = 1.25;   // señal en MOVIMIENTO: más bloom
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(256, 256), BLOOM, 0.6, 0.2);
+compositor.addPass(bloom);
+compositor.addPass(new THREE.ShaderPass({
+  uniforms: { tDiffuse: { value: null }, fuerza: { value: 1.15 } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float fuerza; varying vec2 vUv;
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 d = (vUv - 0.5) * vec2(1.0, 0.75);
+      gl_FragColor = vec4(c.rgb * clamp(1.0 - fuerza * dot(d, d) * 1.6, 0.0, 1.0), 1.0); }`,
+}));
+
+function ajustar() {
+  const w = innerWidth || 1, h = innerHeight || 1, a = w / h;
+  renderer.setSize(w, h, false);
+  compositor.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  compositor.setSize(w, h);
+  bloom.setSize(Math.round(w / 2), Math.round(h / 2));
+  camara.aspect = a;
+  // Señal: se conserva el ancho visible del original 16:9 (fov horizontal ~60°); gemelo: alto fijo
+  camara.fov = VISTA.vfov || THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(VISTA.hfov / 2)) / Math.max(a, 0.6)));
+  camara.updateProjectionMatrix();
+}
+addEventListener("resize", ajustar);
+ajustar();
+
+// ---------- animación ----------
+const COL_BASE = new THREE.Color(0x0b1a16), COL_MOV = new THREE.Color(0xff3b2f), COL_QUIETO = new THREE.Color(0x1e8cff);
+const COL_BORDE_MOV = new THREE.Color(0xff4a3d), COL_HAZ_QUIETO = new THREE.Color(0x6fa8ff), COL_PISO_NOCHE = new THREE.Color(0x060c0b);
+// Noche (escenario simulado): penumbra, baldosas del enlace en azul tenue y 2 pulsos breves; nunca rojo ni zonas
+function actualizarNoche(t) {
+  ponerCamara(VISTA.az + 5 * Math.sin(t * 2 * Math.PI / 40));
+  const p = pulsoNoche(t);
+  tmpCol.copy(COL_BASE).lerp(COL_QUIETO, 0.12 + 0.5 * p);
+  for (let k = 0; k < enLinea.length; k++) baldosas.setColorAt(k, enLinea[k] ? tmpCol : COL_PISO_NOCHE);
+  baldosas.instanceColor.needsUpdate = true;
+  haz.material.color.copy(COL_HAZ_QUIETO); haz.material.opacity = 0.25 + 0.4 * p;
+  tubo.material.opacity = 0; ondasRojas.forEach((o) => { o.userData.mat.opacity = 0; });
+  cupulas.forEach((m, k) => { const r = 0.35 + ((t * 0.4 + k * 1.1) % 3.3); m.scale.setScalar(r); m.material.opacity = 0.1 * (1 - r / 3.65); });
+  matHolo.uniforms.borde.value.copy(COLOR_FIG); matHolo.uniforms.suelo.value = 1;
+  bloom.strength = 0.45 + 0.3 * p;
+  halo.material.opacity = 0; particulas.material.opacity = 0; estela.forEach((e) => { e.material.opacity = 0; });
+  if (mezclador && posCama) {                           // quieta entre pulsos: solo cambia en los dos movimientos
+    figura.position.copy(posCama); figura.quaternion.copy(giroCama);
+    posarDormida(t);
+  }
+}
+const tmpCol = new THREE.Color(), tmpCol2 = new THREE.Color();
+let cuadros = 0, fpsMedido = 0, ultimoFps = performance.now();
+function actualizar(ahora) {
+  if (ESC_NOCHE) { actualizarNoche(tActual()); compositor.render(); return; }
+  const reducido = REDUCIDO.matches;
+  if (MODO === "senal") {
+    const t = tActual();
+    ponerCamara(VISTA.az + (reducido ? 0 : 12 * Math.sin(t * 2 * Math.PI / 60)));
+    const sv = ESC_VIDEO ? senalVideo(t) : null;              // escenario simulado: señal sintética, no K002
+    if (D || sv) {
+      const i = sv ? 0 : idx(t), mov = sv ? sv.mov : D.mov[i] === 1;
+      const brillo = Math.min(1.4, sv ? sv.suave : D.suave[i] / Math.max(D.entrada[i], 1e-6)) / 1.4;
+      if (sv) {   // fundido continuo entre azul y rojo (función pura de t: cada cuadro del video es reproducible)
+        tmpCol.copy(COL_BASE).lerp(COL_QUIETO, 0.12 + 0.45 * brillo).lerp(tmpCol2.copy(COL_BASE).lerp(COL_MOV, 0.8 + 0.2 * brillo), sv.rojo);
+      } else {
+        const fuerza = mov ? 0.8 + 0.2 * brillo : 0.12 + 0.45 * brillo;
+        tmpCol.copy(COL_BASE).lerp(mov ? COL_MOV : COL_QUIETO, fuerza);
+      }
+      // Solo las baldosas a lo largo de la línea Huawei–placa: nunca un foco bajo la persona
+      for (let k = 0; k < enLinea.length; k++) baldosas.setColorAt(k, enLinea[k] ? tmpCol : COL_BASE);
+      baldosas.instanceColor.needsUpdate = true;
+      if (sv) rojo = sv.rojo;
+      else rojo += ((mov ? 1 : 0) - rojo) * (reducido ? 1 : 0.3);   // sigue el mismo dato que baldosas y panel, con fundido corto (~0,1 s)
+    }
+    // MOVIMIENTO: tubo rojo grueso, ondas rojas desde la línea, borde rojo de la figura y más bloom; quieto: azul
+    haz.material.color.copy(COL_HAZ_QUIETO); haz.material.opacity = 0.6 * (1 - rojo);
+    tubo.material.opacity = 0.95 * rojo;
+    ondasRojas.forEach((o, k) => {
+      const q = reducido ? 0.35 + 0.3 * k : (t * 0.9 + k * 0.5) % 1;
+      const r = 0.05 + 0.6 * q;
+      o.children.forEach((a) => a.scale.set(r, r, r));
+      o.userData.mat.opacity = 0.9 * rojo * (1 - q) ** 1.5;
+    });
+    matHolo.uniforms.borde.value.copy(COLOR_FIG).lerp(COL_BORDE_MOV, ESC_VIDEO ? 0.7 * rojo : rojo);
+    bloom.strength = BLOOM + (BLOOM_MOV - BLOOM) * rojo + (sv ? 0.35 * sv.intenso : 0);   // caída simulada: rojo intenso
+    cupulas.forEach((m, k) => {
+      const r = 0.35 + (((reducido ? 1.2 : t) * 0.6 + k * 1.1) % 3.3);
+      m.scale.setScalar(r); m.material.opacity = (ESC_VIDEO ? 0.2 : 0.42) * (1 - r / 3.65);
+    });
+    const quien = ESC_VIDEO ? personaVideo : persona;
+    const p = quien(t), cae = p.cae || 0;
+    figura.position.set(p.x ?? PASO_X, 0, p.z); figura.rotation.y = p.rumbo;
+    if (mezclador) {
+      accCaminar.time = p.camina !== null ? (ESC_VIDEO ? p.camina : p.camina * RITMO) % accCaminar.getClip().duration : 0;
+      accQuieto.time = (t * 0.8) % accQuieto.getClip().duration;
+      accCaminar.setEffectiveWeight(p.w * (1 - cae)); accQuieto.setEffectiveWeight((1 - p.w) * (1 - cae));
+      if (accCaida) { accCaida.time = Math.min(p.tCaida, accCaida.getClip().duration - 0.001); accCaida.setEffectiveWeight(cae); }
+      mezclador.update(0);
+    }
+    // tendida en el piso: sin atenuar los pies, y sin el halo ni las partículas verticales
+    matHolo.uniforms.suelo.value = cae;
+    halo.material.opacity = 0.16 * (1 - cae);
+    particulas.material.opacity = 0.5 * (1 - 0.8 * cae);
+    moverParticulas(reducido ? 0 : t);
+    estela.forEach((e, k) => {
+      const q = quien(t - (k + 1) * 0.07), d = Math.hypot((q.x ?? PASO_X) - (p.x ?? PASO_X), q.z - p.z);
+      e.position.set(q.x ?? PASO_X, 1.0, q.z); e.material.opacity = d > 0.015 && cae < 0.5 ? 0.07 * (1 - k / 5) : 0;
+    });
+  } else if (MODO === "instalacion") {
+    const t = (ahora - tInicio) / 1000;
+    ponerCamara(reducido ? 20 : (t * 6) % 360);          // giro lento: una vuelta por minuto
+  } else {
+    const t = (ahora - tInicio) / 1000;
+    ponerCamara(0);
+    figura.rotation.y = reducido ? 0 : 0.35 * Math.sin(t * 2 * Math.PI / 14);
+    if (mezclador) { accCaminar.setEffectiveWeight(0); accQuieto.setEffectiveWeight(1); accQuieto.time = reducido ? 0 : (t * 0.8) % accQuieto.getClip().duration; mezclador.update(0); }
+    moverParticulas(reducido ? 0 : t);
+    suavizarZonas(t);
+    // Línea de escaneo: recorre la figura de arriba abajo, lento (3,2 s), cada 6 s. Con movimiento reducido, no hay.
+    const s = (((ahora - escaneoInicio) / 1000) % ESCANEO.ciclo) / ESCANEO.barrido;
+    if (s >= 1 || reducido) { linea.material.opacity = 0; matHolo.uniforms.escOn.value = 0; }
+    else {
+      const y = 1.82 * (1 - s), intensidad = Math.sin(Math.PI * s) ** 0.5;
+      linea.position.y = y; linea.material.opacity = 0.22 * intensidad;
+      matHolo.uniforms.escY.value = y; matHolo.uniforms.escOn.value = intensidad;
+    }
+  }
+  compositor.render();
+}
+function bucle(ahora) {
+  if (pausado || document.hidden) return;
+  actualizar(ahora || performance.now());
+  cuadros++;
+  if (ahora - ultimoFps >= 1000) { fpsMedido = cuadros * 1000 / (ahora - ultimoFps); cuadros = 0; ultimoFps = ahora; }
+  requestAnimationFrame(bucle);
+}
+
+// Interfaz mínima para la app y las pruebas
+window.AURA_ESCENA = { modo: MODO, escenario: FIJO ? ESC : null, fps: () => fpsMedido,
+  // video (escenario simulado): fija el tiempo y dibuja ese cuadro ya, sin bucle (determinista)
+  fijar: (t) => { pausado = true; tFijo = t; actualizar(performance.now()); return true; },
+  senal: ESC_VIDEO ? senalVideo : null,
+  noche: ESC_NOCHE ? { pulsos: PULSOS.slice(), pulso: pulsoNoche,
+    // huella de la pose (huesos rotados + posición): para comprobar que entre pulsos la figura queda totalmente quieta
+    pose: () => (posCama ? [figura.position, figura.quaternion, ...Object.keys(POSE_DORMIR).map((n) => huesosFig[n].quaternion)]
+      .map((q) => q.toArray().map((v) => v.toFixed(5)).join(",")).join(";") : null) } : null, pausado: () => pausado, reducido: () => REDUCIDO.matches, listo: cargaFigura,
+  // fracción del alto del lienzo que ocupa la figura de 1,70 m (gemelo)
+  alturaFigura: () => { const a = new THREE.Vector3(0, 0, 0).project(camara), b = new THREE.Vector3(0, 1.7, 0).project(camara); return Math.round((b.y - a.y) / 2 * 100) / 100; },
+  efectos: () => ({ rojo:Math.round(rojo * 100) / 100, bloom: Math.round(bloom.strength * 100) / 100, escaneo: Math.round(matHolo.uniforms.escOn.value * 100) / 100 }),
+  zonas: () => Object.fromEntries(Object.entries(zonas).map(([id, z]) => [id, { op: Math.round(z.op * 100) / 100, dibujo: Math.round(z.sprites[0].material.opacity * 100) / 100, color: "#" + z.color.getHexString() }])) };
+
+const datos = MODO === "senal" && !FIJO
+  ? fetch("../datos/k002_reproduccion.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+  : Promise.resolve(null);
+Promise.all([datos, cargaFigura.catch((e) => { console.error("modelo", e); })]).then(([d]) => {
+  D = d;
+  parent.postMessage({ tipo: "holograma_listo", modo: MODO, datos: !!d }, location.origin);
+  requestAnimationFrame(bucle);
+});
+</script>
+</body>
+</html>
